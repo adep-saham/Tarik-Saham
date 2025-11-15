@@ -5,6 +5,36 @@ import yfinance as yf
 from datetime import datetime
 import altair as alt
 
+# ==========================
+# TELEGRAM CONFIG (TOKEN ONLY)
+# ==========================
+
+TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"  # TIDAK muncul di UI
+
+# ========================
+# FUNGSI TELEGRAM
+# ========================
+
+st.sidebar.header("📢 Telegram Alerts")
+telegram_chat = st.sidebar.text_input("Chat ID Telegram")
+send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
+
+def send_telegram(msg, chat_id):
+    import requests
+    if not chat_id:
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": msg,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, data=data)
+    except Exception as e:
+        print("Telegram Error:", e)
+
 # ===================== PAGE CONFIG =====================
 st.set_page_config(
     page_title="Tarik Saham - ADP",
@@ -65,13 +95,6 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-# ==========================
-# TELEGRAM CONFIG (TOKEN ONLY)
-# ==========================
-
-TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"  # TIDAK muncul di UI
-
 
 # ===================== SIDEBAR INPUT =====================
 st.sidebar.header("⚙️ Pengaturan Data")
@@ -135,26 +158,6 @@ Masukkan kode saham sesuai format Yahoo Finance. Untuk saham Indonesia gunakan a
 Aplikasi ini mengambil data OHLCV dari Yahoo Finance secara langsung, tanpa perlu TradingView berbayar.
 </div>
 """, unsafe_allow_html=True)
-
-st.sidebar.header("📢 Telegram Alerts")
-telegram_chat = st.sidebar.text_input("Chat ID Telegram")
-send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
-
-def send_telegram(msg, chat_id):
-    import requests
-    if not chat_id:
-        return
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
-        "chat_id": chat_id,
-        "text": msg,
-        "parse_mode": "Markdown"
-    }
-    try:
-        requests.post(url, data=data)
-    except Exception as e:
-        print("Telegram Error:", e)
 
 # ===================== HELPER FUNGSI =====================
 
@@ -1154,6 +1157,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
