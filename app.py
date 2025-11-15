@@ -66,6 +66,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ==========================
+# TELEGRAM CONFIG (TOKEN ONLY)
+# ==========================
+
+TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"  # TIDAK muncul di UI
+
+
 # ===================== SIDEBAR INPUT =====================
 st.sidebar.header("⚙️ Pengaturan Data")
 
@@ -130,9 +137,9 @@ Aplikasi ini mengambil data OHLCV dari Yahoo Finance secara langsung, tanpa perl
 """, unsafe_allow_html=True)
 
 st.sidebar.header("📢 Telegram Alerts")
-telegram_token = st.sidebar.text_input("Bot Token")
-telegram_chat = st.sidebar.text_input("Chat ID")
-send_alerts = st.sidebar.checkbox("Kirim Alert Telegram", value=False)
+telegram_chat = st.sidebar.text_input("Chat ID Telegram")
+send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
+
 def send_telegram(msg, token, chat_id):
     import requests
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -1142,6 +1149,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
