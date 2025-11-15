@@ -1108,30 +1108,32 @@ if scan_btn:
 import io
 
 if scan_btn:
-
     st.markdown("<div class='section-title'>📤 Export Data</div>", unsafe_allow_html=True)
 
     # Export Excel
-    excel_buffer = io.BytesIO()
-    df_rank.to_excel(excel_buffer, index=False)
-    st.download_button(
-        label="📊 Download Excel",
-        data=excel_buffer.getvalue(),
-        file_name="multi_ticker_scan.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    try:
+        excel_buffer = io.BytesIO()
+        df_rank.to_excel(excel_buffer, index=False)
+        st.download_button(
+            label="📊 Download Excel",
+            data=excel_buffer.getvalue(),
+            file_name="multi_ticker_scan.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except ModuleNotFoundError:
+        st.warning("Export Excel membutuhkan library **openpyxl**. Tambahkan `openpyxl` di requirements.txt.")
 
-    # Export PDF
+    # Export PDF (kalau sudah pasang pdfkit + wkhtmltopdf)
     import pdfkit
     html_table = df_rank.to_html()
     pdf_buffer = pdfkit.from_string(html_table, False)
-
     st.download_button(
         label="📄 Download PDF",
         data=pdf_buffer,
         file_name="multi_ticker_scan.pdf",
         mime="application/pdf"
     )
+
 
 # ===================== FOOTER =====================
 st.markdown("""
@@ -1140,5 +1142,6 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
