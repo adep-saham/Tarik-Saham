@@ -7,7 +7,7 @@ import altair as alt
 
 # ===================== PAGE CONFIG =====================
 st.set_page_config(
-    page_title="Technical Analyzer - Yahoo Finance",
+    page_title="Tarik Saham - ADP",
     layout="wide"
 )
 
@@ -1142,6 +1142,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
