@@ -244,7 +244,7 @@ if analyze_btn:
             # Hitung indikator
             df_ind = calc_indicators(df)
             last = df_ind.iloc[-1]
-
+            desc = interpret_last(last)
             # Tabel indikator terakhir
             st.markdown("<div class='section-title'>🧮 Nilai Indikator Terakhir</div>", unsafe_allow_html=True)
 
@@ -302,4 +302,5 @@ Technical Analyzer · EMA, %R, CCI, AO, Volume · Data dari Yahoo Finance.<br>
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
