@@ -310,6 +310,7 @@ def interpret_last(row):
 def detect_patterns(df: pd.DataFrame):
     """
     Deteksi pola: breakout 20 hari, support/resistance, EMA cross, divergence sederhana AO vs harga.
+    Semua nilai penting dipaksa jadi float (safe_float) agar tidak ada ValueError dari Series.
     """
     patterns = []
     if len(df) < 5:
@@ -319,54 +320,63 @@ def detect_patterns(df: pd.DataFrame):
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
-    close = safe_float(last["Close"])
-    ema20 = safe_float(last["EMA20"])
-    ema50 = safe_float(last["EMA50"])
+    close  = safe_float(last.get("Close"))
+    ema20  = safe_float(last.get("EMA20"))
+    ema50  = safe_float(last.get("EMA50"))
+    prev_ema20 = safe_float(prev.get("EMA20"))
+    prev_ema50 = safe_float(prev.get("EMA50"))
 
-    # Breakout 20 hari
+    # ---------- Breakout 20 hari + Support / Resistance ----------
     if len(df) >= 20:
-        highest_close_20_prev = df["Close"].rolling(20).max().iloc[-2]
-        if close > highest_close_20_prev:
+        highest_close_20_prev = safe_float(df["Close"].rolling(20).max().iloc[-2])
+        if (not np.isnan(close)) and (not np.isnan(highest_close_20_prev)) and close > highest_close_20_prev:
             patterns.append(
                 f"Breakout 20 hari: Close {close:.2f} di atas high 20-bar sebelumnya ({highest_close_20_prev:.2f})."
             )
 
-        support_20 = df["Low"].rolling(20).min().iloc[-1]
-        resist_20 = df["High"].rolling(20).max().iloc[-1]
-        patterns.append(
-            f"Level support/resistance 20 hari: Support ~{support_20:.2f}, Resistance ~{resist_20:.2f}."
-        )
+        support_20 = safe_float(df["Low"].rolling(20).min().iloc[-1])
+        resist_20  = safe_float(df["High"].rolling(20).max().iloc[-1])
+        if not np.isnan(support_20) and not np.isnan(resist_20):
+            patterns.append(
+                f"Level support/resistance 20 hari: Support ~{support_20:.2f}, Resistance ~{resist_20:.2f}."
+            )
 
-    # EMA cross
-    if not np.isnan(ema20) and not np.isnan(ema50):
-        prev_rel = np.sign(safe_float(prev["EMA20"]) - safe_float(prev["EMA50"]))
-        now_rel = np.sign(ema20 - ema50)
+    # ---------- EMA cross ----------
+    if not any(np.isnan(x) for x in [ema20, ema50, prev_ema20, prev_ema50]):
+        prev_rel = np.sign(prev_ema20 - prev_ema50)
+        now_rel  = np.sign(ema20 - ema50)
         if prev_rel <= 0 and now_rel > 0:
             patterns.append("EMA20 baru saja golden cross ke atas EMA50 (sinyal bullish menengah).")
         elif prev_rel >= 0 and now_rel < 0:
             patterns.append("EMA20 baru saja death cross ke bawah EMA50 (sinyal bearish menengah).")
 
-    # Divergence sederhana AO vs harga
+    # ---------- Divergence sederhana AO vs harga ----------
     if len(df) >= 60 and df["AO"].notna().sum() >= 10:
         win_recent = df.iloc[-30:]
-        win_prev = df.iloc[-60:-30]
+        win_prev   = df.iloc[-60:-30]
 
-        price_high_recent = win_recent["Close"].max()
-        price_high_prev = win_prev["Close"].max()
-        ao_high_recent = win_recent["AO"].max()
-        ao_high_prev = win_prev["AO"].max()
+        price_high_recent = safe_float(win_recent["Close"].max())
+        price_high_prev   = safe_float(win_prev["Close"].max())
+        ao_high_recent    = safe_float(win_recent["AO"].max())
+        ao_high_prev      = safe_float(win_prev["AO"].max())
 
-        price_low_recent = win_recent["Close"].min()
-        price_low_prev = win_prev["Close"].min()
-        ao_low_recent = win_recent["AO"].min()
-        ao_low_prev = win_prev["AO"].min()
+        price_low_recent = safe_float(win_recent["Close"].min())
+        price_low_prev   = safe_float(win_prev["Close"].min())
+        ao_low_recent    = safe_float(win_recent["AO"].min())
+        ao_low_prev      = safe_float(win_prev["AO"].min())
 
-        if price_high_recent > price_high_prev and ao_high_recent <= ao_high_prev:
-            patterns.append("Indikasi bearish divergence: harga membuat high lebih tinggi, AO tidak mengkonfirmasi.")
-        if price_low_recent < price_low_prev and ao_low_recent >= ao_low_prev:
-            patterns.append("Indikasi bullish divergence: harga membuat low lebih rendah, AO tidak mengkonfirmasi.")
+        if (not np.isnan(price_high_recent) and not np.isnan(price_high_prev) and
+            not np.isnan(ao_high_recent) and not np.isnan(ao_high_prev)):
+            if price_high_recent > price_high_prev and ao_high_recent <= ao_high_prev:
+                patterns.append("Indikasi bearish divergence: harga membuat high lebih tinggi, AO tidak mengkonfirmasi.")
+
+        if (not np.isnan(price_low_recent) and not np.isnan(price_low_prev) and
+            not np.isnan(ao_low_recent) and not np.isnan(ao_low_prev)):
+            if price_low_recent < price_low_prev and ao_low_recent >= ao_low_prev:
+                patterns.append("Indikasi bullish divergence: harga membuat low lebih rendah, AO tidak mengkonfirmasi.")
 
     return patterns
+
 
 def generate_entry_plan(df: pd.DataFrame):
     """
@@ -669,6 +679,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume · Data dari Yaho
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
