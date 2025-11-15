@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import altair as alt
+
 from datetime import datetime
 
 # ===================== PAGE CONFIG =====================
@@ -289,28 +291,107 @@ if analyze_btn:
             for k, v in desc.items():
                 st.markdown(f"- **{k}**: {v}")
 
-            # Chart
-            st.markdown("<div class='section-title'>📈 Chart Harga & Indikator</div>", unsafe_allow_html=True)
+           # Chart dengan Altair (lebih aman)
+st.markdown("<div class='section-title'>📈 Chart Harga & Indikator</div>", unsafe_allow_html=True)
 
-            c1, c2 = st.columns(2)
+# Siapkan data chart: reset index → kolom Date
+chart_data = df_ind.copy()
+chart_data = chart_data.reset_index()
+if "Date" not in chart_data.columns:
+    chart_data = chart_data.rename(columns={chart_data.columns[0]: "Date"})
 
-            with c1:
-                st.markdown("**Close + EMA20/EMA50**")
-                chart_df = df_ind[["Close", "EMA20", "EMA50"]].copy()
-                chart_df.index = pd.to_datetime(df_ind.index)
-                st.line_chart(chart_df)
+c1, c2 = st.columns(2)
 
-                st.markdown("**AO (Awesome Oscillator)**")
-                st.bar_chart(df_ind["AO"])
+# --------- KIRI: Harga + EMA & AO ----------
+with c1:
+    st.markdown("**Close + EMA20/EMA50**")
 
-            with c2:
-                st.markdown("**Volume & Volume MA20**")
-                vol_df = df_ind[["Volume", "VOL_MA20"]].copy()
-                vol_df.index = pd.to_datetime(df_ind.index)
-                st.line_chart(vol_df)
+    price_chart = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x="Date:T",
+            y=alt.Y("Close:Q", title="Harga"),
+            color=alt.value("#F5D26B")
+        )
+    )
 
-                st.markdown("**CCI(200)**")
-                st.line_chart(df_ind["CCI200"])
+    ema20_chart = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x="Date:T",
+            y="EMA20:Q",
+            color=alt.value("#00E0FF")
+        )
+    )
+
+    ema50_chart = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x="Date:T",
+            y="EMA50:Q",
+            color=alt.value("#FF6B6B")
+        )
+    )
+
+    st.altair_chart(
+        (price_chart + ema20_chart + ema50_chart).interactive(),
+        use_container_width=True,
+    )
+
+    st.markdown("**AO (Awesome Oscillator)**")
+    ao_chart = (
+        alt.Chart(chart_data)
+        .mark_bar()
+        .encode(
+            x="Date:T",
+            y=alt.Y("AO:Q", title="AO"),
+            color=alt.condition(
+                alt.datum.AO >= 0,
+                alt.value("#21c55d"),  # hijau
+                alt.value("#ef4444"),  # merah
+            ),
+        )
+    )
+    st.altair_chart(ao_chart, use_container_width=True)
+
+# --------- KANAN: Volume & CCI ----------
+with c2:
+    st.markdown("**Volume & Volume MA20**")
+    vol_bar = (
+        alt.Chart(chart_data)
+        .mark_bar()
+        .encode(
+            x="Date:T",
+            y=alt.Y("Volume:Q", title="Volume"),
+            color=alt.value("#4b5563"),
+        )
+    )
+    vol_ma_line = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x="Date:T",
+            y="VOL_MA20:Q",
+            color=alt.value("#F5D26B"),
+        )
+    )
+    st.altair_chart((vol_bar + vol_ma_line).interactive(), use_container_width=True)
+
+    st.markdown("**CCI(200)**")
+    cci_chart = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x="Date:T",
+            y=alt.Y("CCI200:Q", title="CCI(200)"),
+            color=alt.value("#38bdf8"),
+        )
+    )
+    st.altair_chart(cci_chart.interactive(), use_container_width=True)
+
 
 else:
     st.info("Masukkan kode saham di sidebar, lalu klik tombol **🚀 Analisa Saham**.")
@@ -322,3 +403,4 @@ Technical Analyzer · EMA, %R, CCI, AO, Volume · Data dari Yahoo Finance.<br>
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
