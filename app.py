@@ -140,11 +140,21 @@ st.sidebar.header("📢 Telegram Alerts")
 telegram_chat = st.sidebar.text_input("Chat ID Telegram")
 send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
 
-def send_telegram(msg, token, chat_id):
+def send_telegram(msg, chat_id):
     import requests
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    requests.post(url, data={"chat_id": chat_id, "text": msg})
+    if not chat_id:
+        return
 
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": msg,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, data=data)
+    except Exception as e:
+        print("Telegram Error:", e)
 
 # ===================== HELPER FUNGSI =====================
 
@@ -1076,19 +1086,21 @@ else:
     st.info("Masukkan kode saham di sidebar, lalu klik tombol **🚀 Analisa Saham**.")
 
 # ===================== TELEGRAM ALERT =====================
-if send_alerts and scan_btn and telegram_token and telegram_chat and len(top_picks) > 0:
+if send_alerts and telegram_chat:
     for _, row in top_picks.iterrows():
+
         msg = (
-            f"🔥 ALERT: {row['Ticker']}\n"
-            f"Confidence: {row['Confidence']:.0f}%\n"
+            f"🔥 *ALERT: {row['Ticker']}*\n"
             f"Trend: {row['Trend']}\n"
+            f"Confidence: {row['Confidence']:.0f}%\n"
             f"Entry: {row['Entry Type']}\n"
             f"RR: {row['RR']}\n"
             f"Volume Spike: {row['VolSpike']}"
         )
-        send_telegram(msg, telegram_token, telegram_chat)
-    st.success("Alert terkirim ke Telegram!")
 
+        send_telegram(msg, telegram_chat)
+
+    st.success("Alert Telegram dikirim!")
 
 # ===================== SCREENER KUSTOM =====================
 if scan_btn:
@@ -1149,6 +1161,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
