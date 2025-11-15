@@ -146,14 +146,31 @@ def calc_indicators(df: pd.DataFrame):
 
     return df
 
-def interpret_last(row: pd.Series):
+import pandas as pd
+import numpy as np
+
+def interpret_last(row):
+    """
+    Terima Series (satu baris) atau DataFrame (beberapa baris),
+    lalu ambil baris terakhir dan kembalikan interpretasi indikator.
+    """
+    # Kalau yang dikirim DataFrame, ambil baris terakhir dulu
+    if isinstance(row, pd.DataFrame):
+        row = row.iloc[-1]
+
     desc = {}
 
-    close = row["Close"]
-    ema20 = row["EMA20"]
-    ema50 = row["EMA50"]
+    # Ambil nilai sebagai float Python biasa (bukan Series)
+    close = float(row["Close"])
+    ema20 = float(row["EMA20"])
+    ema50 = float(row["EMA50"])
+    wr    = float(row["WR14"])   if not pd.isna(row["WR14"])   else np.nan
+    cci   = float(row["CCI200"]) if not pd.isna(row["CCI200"]) else np.nan
+    ao    = float(row["AO"])     if not pd.isna(row["AO"])     else np.nan
+    vol   = float(row["Volume"])
+    vol_ma20 = float(row["VOL_MA20"]) if not pd.isna(row["VOL_MA20"]) else np.nan
 
-    # Trend EMA
+    # ---------- Trend EMA ----------
     if ema20 > ema50 and close > ema20:
         desc["Trend EMA"] = "Uptrend kuat (Close > EMA20 > EMA50)."
     elif ema20 > ema50 and close <= ema20:
@@ -163,8 +180,7 @@ def interpret_last(row: pd.Series):
     else:
         desc["Trend EMA"] = "Downtrend / lemah (EMA20 di bawah EMA50 dan harga di bawah EMA20)."
 
-    # %R(14)
-    wr = row["WR14"]
+    # ---------- %R(14) ----------
     if np.isnan(wr):
         desc["%R(14)"] = "Data belum cukup untuk menghitung %R(14)."
     elif wr <= -80:
@@ -174,8 +190,7 @@ def interpret_last(row: pd.Series):
     else:
         desc["%R(14)"] = f"{wr:.1f} → Zona netral."
 
-    # CCI200
-    cci = row["CCI200"]
+    # ---------- CCI(200) ----------
     if np.isnan(cci):
         desc["CCI(200)"] = "Data belum cukup untuk menghitung CCI(200)."
     elif cci > 100:
@@ -185,8 +200,7 @@ def interpret_last(row: pd.Series):
     else:
         desc["CCI(200)"] = f"{cci:.1f} → Momentum masih normal."
 
-    # AO
-    ao = row["AO"]
+    # ---------- AO ----------
     if np.isnan(ao):
         desc["AO"] = "Data belum cukup untuk menghitung AO."
     elif ao > 0:
@@ -196,9 +210,7 @@ def interpret_last(row: pd.Series):
     else:
         desc["AO"] = f"{ao:.4f} → Netral."
 
-    # Volume
-    vol = row["Volume"]
-    vol_ma20 = row["VOL_MA20"]
+    # ---------- Volume ----------
     if np.isnan(vol_ma20) or vol_ma20 == 0:
         vol_text = "Data belum cukup untuk menghitung Volume MA20."
     else:
@@ -212,6 +224,7 @@ def interpret_last(row: pd.Series):
     desc["Volume"] = vol_text
 
     return desc
+
 
 # ===================== MAIN FLOW =====================
 if analyze_btn:
@@ -289,3 +302,4 @@ Technical Analyzer · EMA, %R, CCI, AO, Volume · Data dari Yahoo Finance.<br>
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
