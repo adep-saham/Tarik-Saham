@@ -129,6 +129,16 @@ Aplikasi ini mengambil data OHLCV dari Yahoo Finance secara langsung, tanpa perl
 </div>
 """, unsafe_allow_html=True)
 
+st.sidebar.header("📢 Telegram Alerts")
+telegram_token = st.sidebar.text_input("Bot Token")
+telegram_chat = st.sidebar.text_input("Chat ID")
+send_alerts = st.sidebar.checkbox("Kirim Alert Telegram", value=False)
+def send_telegram(msg, token, chat_id):
+    import requests
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    requests.post(url, data={"chat_id": chat_id, "text": msg})
+
+
 # ===================== HELPER FUNGSI =====================
 
 @st.cache_data(show_spinner=False)
@@ -1027,13 +1037,101 @@ if scan_btn:
         df_rank = df_rank.sort_values("Confidence", ascending=False)
 
     st.dataframe(df_rank)
+    st.sidebar.header("🎯 Screener Kustom")
+    filter_trend = st.sidebar.multiselect("Trend wajib", ["strong_up", "up"], default=["strong_up", "up"])
+    min_conf = st.sidebar.slider("Minimal Confidence", 0, 100, 60)
+    min_vol_ratio = st.sidebar.slider("Minimal Volume Spike (x)", 0.0, 3.0, 1.2, 0.1)
+    ao_filter = st.sidebar.selectbox("AO harus", ["Tidak wajib", "Harus > 0"], index=1)
 
+# ===================== AUTO TOP PICKS =====================
+if scan_btn and len(df_rank) > 0 and "Confidence" in df_rank.columns:
+    st.markdown("<div class='section-title'>🏆 Top Picks Hari Ini</div>", unsafe_allow_html=True)
+
+    df_valid = df_rank[df_rank["Status"] != "No Trade"].copy()
+    top_picks = df_valid.sort_values("Confidence", ascending=False).head(3)
+
+    if len(top_picks) == 0:
+        st.info("Belum ada saham dengan sinyal kuat hari ini.")
+    else:
+        st.dataframe(top_picks)
+        for _, row in top_picks.iterrows():
+            st.success(
+                f"**{row['Ticker']}** – Confidence **{row['Confidence']:.0f}%** "
+                f"| Trend: **{row['Trend']}** | Entry: **{row['Entry Type']}**"
+            )
+
+    
     # highlight ticker top pick
     st.success("Scan selesai! Pilih ticker dengan Confidence > 70% untuk peluang terbaik.")
 
 
 else:
     st.info("Masukkan kode saham di sidebar, lalu klik tombol **🚀 Analisa Saham**.")
+
+# ===================== TELEGRAM ALERT =====================
+if send_alerts and scan_btn and telegram_token and telegram_chat and len(top_picks) > 0:
+    for _, row in top_picks.iterrows():
+        msg = (
+            f"🔥 ALERT: {row['Ticker']}\n"
+            f"Confidence: {row['Confidence']:.0f}%\n"
+            f"Trend: {row['Trend']}\n"
+            f"Entry: {row['Entry Type']}\n"
+            f"RR: {row['RR']}\n"
+            f"Volume Spike: {row['VolSpike']}"
+        )
+        send_telegram(msg, telegram_token, telegram_chat)
+    st.success("Alert terkirim ke Telegram!")
+
+
+# ===================== SCREENER KUSTOM =====================
+if scan_btn:
+    st.markdown("<div class='section-title'>🎛️ Screener Kustom</div>", unsafe_allow_html=True)
+
+    sc = df_rank.copy()
+
+    sc = sc[
+        (sc["Trend"].isin(filter_trend)) &
+        (sc["Confidence"] >= min_conf) &
+        (sc["VolSpike"] >= min_vol_ratio)
+    ]
+
+    if ao_filter == "Harus > 0":
+        sc = sc[sc["Status"] != "No Trade"]
+
+    if len(sc) == 0:
+        st.warning("Tidak ada saham yang memenuhi filter kustom.")
+    else:
+        st.dataframe(sc)
+        st.success(f"{len(sc)} saham cocok dengan filter kamu.")
+
+# ===================== EXPORTER =====================
+import io
+
+if scan_btn:
+
+    st.markdown("<div class='section-title'>📤 Export Data</div>", unsafe_allow_html=True)
+
+    # Export Excel
+    excel_buffer = io.BytesIO()
+    df_rank.to_excel(excel_buffer, index=False)
+    st.download_button(
+        label="📊 Download Excel",
+        data=excel_buffer.getvalue(),
+        file_name="multi_ticker_scan.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # Export PDF
+    import pdfkit
+    html_table = df_rank.to_html()
+    pdf_buffer = pdfkit.from_string(html_table, False)
+
+    st.download_button(
+        label="📄 Download PDF",
+        data=pdf_buffer,
+        file_name="multi_ticker_scan.pdf",
+        mime="application/pdf"
+    )
 
 # ===================== FOOTER =====================
 st.markdown("""
@@ -1042,4 +1140,5 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
