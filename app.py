@@ -113,7 +113,7 @@ def fetch_data(ticker: str, period: str, interval: str):
 
 def calc_indicators(df: pd.DataFrame):
     df = df.copy()
-    df = df.rename(columns=str.capitalize)  # Open, High, Low, Close, Volume dsb.
+    df = df.rename(columns=str.capitalize)  # Open, High, Low, Close, Volume
 
     if len(df) == 0:
         raise ValueError("Data kosong dari Yahoo Finance.")
@@ -146,39 +146,58 @@ def calc_indicators(df: pd.DataFrame):
 
     return df
 
-import pandas as pd
-import numpy as np
+def safe_float(val):
+    """
+    Paksa nilai apa pun (scalar / Series / ndarray) menjadi float tunggal.
+    Jika tidak bisa atau NaN -> kembalikan np.nan.
+    """
+    if isinstance(val, (pd.Series, list, np.ndarray)):
+        try:
+            val = val[-1]
+        except Exception:
+            try:
+                val = val.iloc[-1]
+            except Exception:
+                return np.nan
+    try:
+        f = float(val)
+        if np.isnan(f):
+            return np.nan
+        return f
+    except Exception:
+        return np.nan
 
 def interpret_last(row):
     """
-    Terima Series (satu baris) atau DataFrame (beberapa baris),
-    lalu ambil baris terakhir dan kembalikan interpretasi indikator.
+    Terima Series (1 baris) atau DataFrame, ambil baris terakhir,
+    lalu buat interpretasi indikator.
     """
-    # Kalau yang dikirim DataFrame, ambil baris terakhir dulu
     if isinstance(row, pd.DataFrame):
         row = row.iloc[-1]
 
     desc = {}
 
-    # Ambil nilai sebagai float Python biasa (bukan Series)
-    close = float(row["Close"])
-    ema20 = float(row["EMA20"])
-    ema50 = float(row["EMA50"])
-    wr    = float(row["WR14"])   if not pd.isna(row["WR14"])   else np.nan
-    cci   = float(row["CCI200"]) if not pd.isna(row["CCI200"]) else np.nan
-    ao    = float(row["AO"])     if not pd.isna(row["AO"])     else np.nan
-    vol   = float(row["Volume"])
-    vol_ma20 = float(row["VOL_MA20"]) if not pd.isna(row["VOL_MA20"]) else np.nan
+    close    = safe_float(row.get("Close"))
+    ema20    = safe_float(row.get("EMA20"))
+    ema50    = safe_float(row.get("EMA50"))
+    wr       = safe_float(row.get("WR14"))
+    cci      = safe_float(row.get("CCI200"))
+    ao       = safe_float(row.get("AO"))
+    vol      = safe_float(row.get("Volume"))
+    vol_ma20 = safe_float(row.get("VOL_MA20"))
 
     # ---------- Trend EMA ----------
-    if ema20 > ema50 and close > ema20:
-        desc["Trend EMA"] = "Uptrend kuat (Close > EMA20 > EMA50)."
-    elif ema20 > ema50 and close <= ema20:
-        desc["Trend EMA"] = "Uptrend, tapi sedang koreksi ke EMA20."
-    elif ema20 <= ema50 and close > ema20:
-        desc["Trend EMA"] = "Potensi reversal naik (Close di atas EMA20 namun EMA20 masih di bawah EMA50)."
+    if not np.isnan(ema20) and not np.isnan(ema50) and not np.isnan(close):
+        if ema20 > ema50 and close > ema20:
+            desc["Trend EMA"] = "Uptrend kuat (Close > EMA20 > EMA50)."
+        elif ema20 > ema50 and close <= ema20:
+            desc["Trend EMA"] = "Uptrend, tapi sedang koreksi ke EMA20."
+        elif ema20 <= ema50 and close > ema20:
+            desc["Trend EMA"] = "Potensi reversal naik (Close di atas EMA20 namun EMA20 masih di bawah EMA50)."
+        else:
+            desc["Trend EMA"] = "Downtrend / lemah (EMA20 di bawah EMA50 dan harga di bawah EMA20)."
     else:
-        desc["Trend EMA"] = "Downtrend / lemah (EMA20 di bawah EMA50 dan harga di bawah EMA20)."
+        desc["Trend EMA"] = "Data belum cukup untuk membaca EMA (periode terlalu pendek?)."
 
     # ---------- %R(14) ----------
     if np.isnan(wr):
@@ -192,7 +211,7 @@ def interpret_last(row):
 
     # ---------- CCI(200) ----------
     if np.isnan(cci):
-        desc["CCI(200)"] = "Data belum cukup untuk menghitung CCI(200)."
+        desc["CCI(200)"] = "Data belum cukup untuk menghitung CCI(200) (butuh ≥ 200 candle)."
     elif cci > 100:
         desc["CCI(200)"] = f"{cci:.1f} → Momentum naik kuat di timeframe besar."
     elif cci < -100:
@@ -202,7 +221,7 @@ def interpret_last(row):
 
     # ---------- AO ----------
     if np.isnan(ao):
-        desc["AO"] = "Data belum cukup untuk menghitung AO."
+        desc["AO"] = "Data belum cukup untuk menghitung AO (butuh ≥ 34 candle)."
     elif ao > 0:
         desc["AO"] = f"{ao:.4f} → Bias bullish (histogram di atas 0)."
     elif ao < 0:
@@ -211,7 +230,7 @@ def interpret_last(row):
         desc["AO"] = f"{ao:.4f} → Netral."
 
     # ---------- Volume ----------
-    if np.isnan(vol_ma20) or vol_ma20 == 0:
+    if np.isnan(vol) or np.isnan(vol_ma20) or vol_ma20 == 0:
         vol_text = "Data belum cukup untuk menghitung Volume MA20."
     else:
         ratio = vol / vol_ma20
@@ -225,7 +244,6 @@ def interpret_last(row):
 
     return desc
 
-
 # ===================== MAIN FLOW =====================
 if analyze_btn:
     if not ticker:
@@ -238,13 +256,15 @@ if analyze_btn:
             st.error("Data kosong. Cek kembali kode saham / periode / interval.")
         else:
             st.markdown("<div class='section-title'>📊 Data Harga (ringkasan)</div>", unsafe_allow_html=True)
-            st.write(f"Baris data: **{len(df)}** | Rentang: **{df.index.min().date()}** s/d **{df.index.max().date()}**")
+            st.write(
+                f"Baris data: **{len(df)}** | Rentang: **{df.index.min().date()}** s/d **{df.index.max().date()}**"
+            )
             st.dataframe(df.tail().round(4))
 
             # Hitung indikator
             df_ind = calc_indicators(df)
             last = df_ind.iloc[-1]
-            desc = interpret_last(last)
+
             # Tabel indikator terakhir
             st.markdown("<div class='section-title'>🧮 Nilai Indikator Terakhir</div>", unsafe_allow_html=True)
 
@@ -302,5 +322,3 @@ Technical Analyzer · EMA, %R, CCI, AO, Volume · Data dari Yahoo Finance.<br>
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
-
-
