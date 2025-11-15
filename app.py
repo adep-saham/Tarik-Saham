@@ -58,7 +58,7 @@ st.markdown("""
 <div style='display:flex; align-items:center; gap:12px; margin-bottom:8px;'>
     <img src="https://img.icons8.com/fluency/96/combo-chart--v1.png" width="60">
     <div>
-        <div class="title-text">Technical Analyzer (Yahoo Finance)</div>
+        <div class="title-text">Tarik Saham - ADP</div>
         <div class="subtitle-text">
             EMA20/50, %R(14), CCI(200), AO, RSI, MACD, ATR, Volume + Pola + Entry Plan + Risk.
         </div>
@@ -1142,6 +1142,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
