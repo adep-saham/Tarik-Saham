@@ -31,7 +31,7 @@ def send_telegram(msg, chat_id):
     payload = {
         "chat_id": chat_id,
         "text": msg,
-        "parse_mode": "Markdown",
+       # "parse_mode": "Markdown",  # <- HAPUS baris ini
     }
 
     try:
@@ -1171,6 +1171,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
