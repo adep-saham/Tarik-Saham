@@ -166,11 +166,21 @@ def calc_indicators(df: pd.DataFrame):
     df["MACDsignal"] = df["MACD"].ewm(span=9, adjust=False).mean()
     df["MACDhist"] = df["MACD"] - df["MACDsignal"]
 
-    # Volume MA20 & rasio
+    # Volume MA20 & rasio (pakai Series bersih)
     df["VOL_MA20"] = df["Volume"].rolling(20).mean()
-    df["VolRatio20"] = df["Volume"] / df["VOL_MA20"]
+
+    vol = df["Volume"].astype(float)
+    vol_ma20 = df["VOL_MA20"].astype(float)
+
+    # Hindari division by zero / NaN
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = vol / vol_ma20
+    ratio = ratio.replace([np.inf, -np.inf], np.nan)
+
+    df["VolRatio20"] = ratio
 
     return df
+
 
 def safe_float(val):
     """
@@ -656,3 +666,4 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume · Data dari Yaho
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
