@@ -60,14 +60,14 @@ st.markdown("""
     <div>
         <div class="title-text">Technical Analyzer (Yahoo Finance)</div>
         <div class="subtitle-text">
-            Hitung & jelaskan EMA20/50, %R(14), CCI(200), AO, RSI, MACD, ATR, Volume langsung dari data Yahoo Finance.
+            EMA20/50, %R(14), CCI(200), AO, RSI, MACD, ATR, Volume + Pola + Entry Plan + Risk.
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ===================== SIDEBAR INPUT =====================
-st.sidebar.header("⚙️ Pengaturan")
+st.sidebar.header("⚙️ Pengaturan Data")
 
 default_ticker = "BUMI.JK"
 ticker = st.sidebar.text_input(
@@ -88,6 +88,30 @@ interval = st.sidebar.selectbox(
     options=["1d", "1h", "30m"],
     index=0,
     help="Interval bar untuk perhitungan indikator."
+)
+
+st.sidebar.header("💰 Risk Management")
+capital = st.sidebar.number_input(
+    "Modal trading (nominal)",
+    min_value=0.0,
+    value=10_000_000.0,
+    step=1_000_000.0,
+    help="Dalam mata uang yang sama dengan harga saham."
+)
+risk_pct = st.sidebar.number_input(
+    "Risk per trade (%)",
+    min_value=0.1,
+    max_value=10.0,
+    value=1.0,
+    step=0.1,
+    help="Berapa % modal yang siap dirisikokan per 1 posisi."
+)
+lot_size = st.sidebar.number_input(
+    "Ukuran 1 lot",
+    min_value=1,
+    value=100,
+    step=1,
+    help="Saham Indonesia biasanya 1 lot = 100 saham."
 )
 
 analyze_btn = st.sidebar.button("🚀 Analisa Saham", use_container_width=True)
@@ -166,24 +190,19 @@ def calc_indicators(df: pd.DataFrame):
     df["MACDsignal"] = df["MACD"].ewm(span=9, adjust=False).mean()
     df["MACDhist"] = df["MACD"] - df["MACDsignal"]
 
-    # Volume MA20 & rasio (versi simpel dan aman)
+    # Volume MA20 & rasio (versi aman)
     df["VOL_MA20"] = df["Volume"].rolling(20).mean()
 
-    # pakai numpy array 1D, apapun bentuk aslinya
     vol_arr = np.asarray(df["Volume"], dtype="float64").reshape(-1)
     vol_ma_arr = np.asarray(df["VOL_MA20"], dtype="float64").reshape(-1)
 
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio = vol_arr / vol_ma_arr
-
-    # ganti inf / -inf jadi NaN
     ratio[~np.isfinite(ratio)] = np.nan
 
-    # assign langsung ke kolom
     df["VolRatio20"] = ratio
 
     return df
-
 
 def safe_float(val):
     """
@@ -192,10 +211,10 @@ def safe_float(val):
     """
     if isinstance(val, (pd.Series, list, np.ndarray)):
         try:
-            val = val[-1]
+            val = val.iloc[-1]
         except Exception:
             try:
-                val = val.iloc[-1]
+                val = val[-1]
             except Exception:
                 return np.nan
     try:
@@ -310,7 +329,7 @@ def interpret_last(row):
 def detect_patterns(df: pd.DataFrame):
     """
     Deteksi pola: breakout 20 hari, support/resistance, EMA cross, divergence sederhana AO vs harga.
-    Semua nilai penting dipaksa jadi float (safe_float) agar tidak ada ValueError dari Series.
+    Semua nilai penting dipaksa jadi float.
     """
     patterns = []
     if len(df) < 5:
@@ -326,7 +345,7 @@ def detect_patterns(df: pd.DataFrame):
     prev_ema20 = safe_float(prev.get("EMA20"))
     prev_ema50 = safe_float(prev.get("EMA50"))
 
-    # ---------- Breakout 20 hari + Support / Resistance ----------
+    # Breakout 20 hari + Support / Resistance
     if len(df) >= 20:
         highest_close_20_prev = safe_float(df["Close"].rolling(20).max().iloc[-2])
         if (not np.isnan(close)) and (not np.isnan(highest_close_20_prev)) and close > highest_close_20_prev:
@@ -341,7 +360,7 @@ def detect_patterns(df: pd.DataFrame):
                 f"Level support/resistance 20 hari: Support ~{support_20:.2f}, Resistance ~{resist_20:.2f}."
             )
 
-    # ---------- EMA cross ----------
+    # EMA cross
     if not any(np.isnan(x) for x in [ema20, ema50, prev_ema20, prev_ema50]):
         prev_rel = np.sign(prev_ema20 - prev_ema50)
         now_rel  = np.sign(ema20 - ema50)
@@ -350,7 +369,7 @@ def detect_patterns(df: pd.DataFrame):
         elif prev_rel >= 0 and now_rel < 0:
             patterns.append("EMA20 baru saja death cross ke bawah EMA50 (sinyal bearish menengah).")
 
-    # ---------- Divergence sederhana AO vs harga ----------
+    # Divergence sederhana AO vs harga
     if len(df) >= 60 and df["AO"].notna().sum() >= 10:
         win_recent = df.iloc[-30:]
         win_prev   = df.iloc[-60:-30]
@@ -377,13 +396,12 @@ def detect_patterns(df: pd.DataFrame):
 
     return patterns
 
-
 def generate_entry_plan(df: pd.DataFrame):
     """
     Generator entry/exit sederhana:
     - Setup Breakout: strong uptrend + breakout 20 bar + AO & volume mendukung
     - Setup Pullback: uptrend + %R oversold (pullback ke EMA20)
-    Semua nilai penting dipaksa jadi float (safe_float) supaya tidak ada ValueError.
+    Semua nilai penting dipaksa jadi float.
     """
     if len(df) < 30:
         return {"status": "Data terlalu pendek untuk membuat trading plan (butuh ≥ 30 bar)."}
@@ -399,20 +417,17 @@ def generate_entry_plan(df: pd.DataFrame):
     vol   = safe_float(last.get("Volume"))
     vol_ma20 = safe_float(last.get("VOL_MA20"))
 
-    # support / resistance 20 bar
     support_20 = safe_float(df["Low"].rolling(20).min().iloc[-1])
     resist_20  = safe_float(df["High"].rolling(20).max().iloc[-1])
 
-    # fallback ATR kalau belum ada
     if np.isnan(atr) or atr == 0:
         atr = safe_float((df["High"] - df["Low"]).rolling(14).mean().iloc[-1])
 
-    # Volume ratio
     vol_ratio = np.nan
     if not np.isnan(vol) and not np.isnan(vol_ma20) and vol_ma20 != 0:
         vol_ratio = vol / vol_ma20
 
-    # Klasifikasi trend
+    # Trend
     trend = "unknown"
     if not any(np.isnan(x) for x in [close, ema20, ema50]):
         if ema20 > ema50 and close > ema20:
@@ -426,14 +441,14 @@ def generate_entry_plan(df: pd.DataFrame):
 
     plan = {}
 
-    # ---------- Breakout 20-bar? ----------
+    # Breakout 20-bar?
     breakout = False
     if len(df) >= 20 and not np.isnan(close):
         prev_high_20 = safe_float(df["Close"].rolling(20).max().iloc[-2])
         if not np.isnan(prev_high_20) and close > prev_high_20:
             breakout = True
 
-    # ---------- Setup Breakout ----------
+    # Setup Breakout
     if (trend == "strong_up"
         and breakout
         and ao > 0
@@ -462,8 +477,8 @@ def generate_entry_plan(df: pd.DataFrame):
             "note"      : "Breakout uptrend dengan volume & momentum mendukung."
         })
 
-    # ---------- Setup Pullback ke EMA20 ----------
-    elif trend in ["strong_up", "up"] and wr <= -80 and not np.isnan(ema20) and not np.isnan(ema50) and not np.isnan(atr):
+    # Setup Pullback ke EMA20
+    elif trend in ["strong_up", "up"] and wr <= -80 and not np.isnan(ema20) and not np.isnan(atr):
         entry_low  = ema20 - 0.5 * atr
         entry_high = ema20 + 0.5 * atr
         stop       = ema50 - 0.5 * atr if not np.isnan(ema50) else ema20 - 2 * atr
@@ -485,7 +500,6 @@ def generate_entry_plan(df: pd.DataFrame):
             "note"      : "Uptrend, harga oversold vs %R(14) → peluang buy di sekitar EMA20."
         })
 
-    # ---------- Tidak ada setup menarik ----------
     else:
         plan.update({
             "status"    : "No Trade",
@@ -501,6 +515,213 @@ def generate_entry_plan(df: pd.DataFrame):
 
     return plan
 
+# ---------- Fitur 1: Confidence Score ----------
+def compute_confidence(df, last, desc, patterns, plan):
+    close = safe_float(last.get("Close"))
+    ema20 = safe_float(last.get("EMA20"))
+    ema50 = safe_float(last.get("EMA50"))
+    ao    = safe_float(last.get("AO"))
+    atr   = safe_float(last.get("ATR14"))
+    vol_ratio = plan.get("vol_ratio20")
+    if vol_ratio is None or np.isnan(vol_ratio):
+        vol_ratio = safe_float(last.get("VolRatio20"))
+
+    trend = plan.get("trend", "unknown")
+    if trend == "strong_up":
+        trend_score = 1.0
+    elif trend == "up":
+        trend_score = 0.7
+    elif trend == "sideways":
+        trend_score = 0.4
+    elif trend == "down":
+        trend_score = 0.1
+    else:
+        trend_score = 0.5
+
+    if np.isnan(ao):
+        ao_score = 0.5
+    elif ao > 0:
+        ao_score = 0.8
+    elif ao < 0:
+        ao_score = 0.2
+    else:
+        ao_score = 0.5
+
+    if np.isnan(vol_ratio):
+        vol_score = 0.5
+    elif vol_ratio >= 2:
+        vol_score = 1.0
+    elif vol_ratio >= 1.5:
+        vol_score = 0.8
+    elif vol_ratio >= 1.2:
+        vol_score = 0.6
+    elif vol_ratio >= 1.0:
+        vol_score = 0.4
+    else:
+        vol_score = 0.2
+
+    breakout_score = 0.3
+    if any("Breakout 20 hari" in p for p in patterns):
+        breakout_score = 1.0
+    elif trend in ["strong_up", "up"]:
+        breakout_score = 0.6
+
+    if not np.isnan(atr) and not np.isnan(close) and close > 0:
+        atr_pct = atr / close
+        if 0.01 <= atr_pct <= 0.05:
+            volat_score = 0.9
+        elif 0.005 <= atr_pct <= 0.08:
+            volat_score = 0.7
+        else:
+            volat_score = 0.4
+    else:
+        volat_score = 0.5
+
+    score = (
+        trend_score * 0.3 +
+        ao_score * 0.2 +
+        vol_score * 0.2 +
+        breakout_score * 0.2 +
+        volat_score * 0.1
+    ) * 100.0
+
+    score = max(0.0, min(100.0, score))
+
+    if score >= 80:
+        label = "Very High (A+) – Sinyal sangat kuat, tapi tetap perlu money management."
+    elif score >= 65:
+        label = "High (A) – Sinyal menarik untuk dipertimbangkan."
+    elif score >= 40:
+        label = "Medium (B) – Boleh watchlist, tunggu konfirmasi."
+    else:
+        label = "Low (C) – Lebih baik hanya dipantau."
+
+    return {"score": score, "label": label}
+
+# ---------- Fitur 2: Narasi Analis Otomatis ----------
+def generate_narrative(ticker, last, desc, patterns, plan, confidence):
+    close = safe_float(last.get("Close"))
+    trend_text = desc.get("Trend EMA", "-")
+    rsi_text   = desc.get("RSI(14)", "-")
+    macd_text  = desc.get("MACD", "-")
+    vol_text   = desc.get("Volume", "-")
+
+    patt_text = "\n".join(f"- {p}" for p in patterns) if patterns else "- Tidak ada pola menonjol."
+
+    status = plan.get("status", "No Trade")
+    entry_type = plan.get("entry_type", "Watchlist")
+    note = plan.get("note", "")
+
+    narrative = f"""
+**Ringkasan {ticker}**
+
+- Harga terakhir sekitar **{close:.2f}**.
+- {trend_text}
+- {rsi_text}
+- {macd_text}
+- {vol_text}
+
+**Pola teknikal yang terdeteksi:**
+{patt_text}
+
+**Rencana trading (eksperimental):**
+
+- Status setup: **{status}**
+- Tipe setup: **{entry_type}**
+- Catatan: {note}
+
+**Confidence Score:** ~**{confidence['score']:.0f}%** → {confidence['label']}
+
+Narasi ini bukan rekomendasi beli/jual, hanya rangkuman kondisi teknikal terakhir untuk membantu pengambilan keputusan.
+"""
+    return narrative
+
+# ---------- Fitur 3: Entry Ladder ----------
+def build_ladders(plan):
+    ladders = {"status": plan.get("status", "No Trade")}
+
+    if plan.get("status") == "No Trade" or "entry_low" not in plan or "entry_high" not in plan:
+        ladders["message"] = "Belum ada setup entry yang valid (status No Trade atau level entry belum lengkap)."
+        return ladders
+
+    low = plan["entry_low"]
+    high = plan["entry_high"]
+    mid = (low + high) / 2
+    mid_low = (low + mid) / 2
+    mid_high = (mid + high) / 2
+
+    ladders["Konservatif"] = [
+        (0.40, low),
+        (0.30, mid_low),
+        (0.30, mid),
+    ]
+
+    ladders["Agresif"] = [
+        (0.30, mid_high),
+        (0.30, high),
+        (0.20, mid),
+        (0.20, low),
+    ]
+
+    ladders["Breakout"] = [
+        (0.50, high),
+        (0.30, mid_high),
+        (0.20, mid),
+    ]
+
+    return ladders
+
+# ---------- Fitur 4: Risk Management ----------
+def compute_risk(capital, risk_pct, lot_size, plan, last_close):
+    info = {}
+
+    if plan.get("status") == "No Trade" or \
+       "entry_low" not in plan or "entry_high" not in plan or "stop" not in plan:
+        info["status"] = "NoTrade"
+        info["message"] = "Belum ada setup dengan level entry & stop yang lengkap."
+        return info
+
+    entry_mid = (plan["entry_low"] + plan["entry_high"]) / 2
+    stop = plan["stop"]
+
+    risk_per_share = entry_mid - stop
+    if risk_per_share <= 0:
+        info["status"] = "Invalid"
+        info["message"] = "Stop loss berada di atas/sama dengan entry (tidak valid untuk posisi long)."
+        return info
+
+    max_risk_money = capital * risk_pct / 100.0
+    if max_risk_money <= 0:
+        info["status"] = "NoCapital"
+        info["message"] = "Modal atau risk % tidak valid."
+        return info
+
+    max_shares = max_risk_money / risk_per_share
+    max_lot = int(max_shares // lot_size)
+
+    if max_lot <= 0:
+        info["status"] = "TooSmall"
+        info["message"] = "Modal/risk terlalu kecil untuk setup ini (hasil perhitungan < 1 lot)."
+        return info
+
+    shares = max_lot * lot_size
+    used_risk_money = shares * risk_per_share
+    position_value = shares * entry_mid
+
+    info.update({
+        "status": "OK",
+        "entry_mid": entry_mid,
+        "stop": stop,
+        "risk_per_share": risk_per_share,
+        "max_lot": max_lot,
+        "shares": shares,
+        "max_risk_money": max_risk_money,
+        "used_risk_money": used_risk_money,
+        "position_value": position_value,
+        "risk_pct": risk_pct,
+        "capital": capital,
+    })
+    return info
 
 # ===================== MAIN FLOW =====================
 if analyze_btn:
@@ -523,7 +744,7 @@ if analyze_btn:
             df_ind = calc_indicators(df)
             last = df_ind.iloc[-1]
 
-            # Tabel indikator terakhir
+            # ===== Indikator tabel =====
             st.markdown("<div class='section-title'>🧮 Nilai Indikator Terakhir</div>", unsafe_allow_html=True)
 
             table = pd.DataFrame({
@@ -550,13 +771,13 @@ if analyze_btn:
             })
             st.dataframe(table)
 
-            # Interpretasi indikator
+            # ===== Interpretasi =====
             st.markdown("<div class='section-title'>🧠 Interpretasi Otomatis</div>", unsafe_allow_html=True)
             desc = interpret_last(last)
             for k, v in desc.items():
                 st.markdown(f"- **{k}**: {v}")
 
-            # Pola teknikal
+            # ===== Pola teknikal =====
             st.markdown("<div class='section-title'>📌 Sinyal Pola Teknis</div>", unsafe_allow_html=True)
             patterns = detect_patterns(df_ind)
             if patterns:
@@ -565,7 +786,7 @@ if analyze_btn:
             else:
                 st.markdown("- Tidak ada pola menonjol yang terdeteksi.")
 
-            # Entry / Exit plan
+            # ===== Entry / Exit plan =====
             st.markdown("<div class='section-title'>🎯 Rencana Entry & Exit (Eksperimental)</div>", unsafe_allow_html=True)
             plan = generate_entry_plan(df_ind)
             st.write(f"Status: **{plan.get('status', 'N/A')}**")
@@ -593,7 +814,66 @@ if analyze_btn:
                 st.dataframe(plan_table)
             st.markdown(f"**Catatan:** {plan.get('note', '-')}")
 
-            # ===================== CHART DENGAN ALTAIR =====================
+            # ===== Confidence Score =====
+            st.markdown("<div class='section-title'>🔥 Confidence Sinyal</div>", unsafe_allow_html=True)
+            conf = compute_confidence(df_ind, last, desc, patterns, plan)
+            st.metric("Confidence Score", f"{conf['score']:.0f} %")
+            st.caption(f"Tingkat keyakinan: {conf['label']}")
+            st.progress(conf["score"] / 100.0)
+
+            # ===== Narasi Analis =====
+            st.markdown("<div class='section-title'>🧾 Narasi Analis Otomatis</div>", unsafe_allow_html=True)
+            narrative = generate_narrative(ticker, last, desc, patterns, plan, conf)
+            st.markdown(narrative)
+
+            # ===== Entry Ladder =====
+            st.markdown("<div class='section-title'>🧱 Entry Ladder Rekomendasi</div>", unsafe_allow_html=True)
+            ladders = build_ladders(plan)
+            if ladders.get("status") == "No Trade" or "Konservatif" not in ladders:
+                st.write(ladders.get("message", "Belum ada setup yang layak dieksekusi."))
+            else:
+                for mode in ["Konservatif", "Agresif", "Breakout"]:
+                    if mode in ladders:
+                        st.markdown(f"**{mode}**")
+                        rows = [{"Porsi": f"{int(p*100)}%", "Harga": h} for (p, h) in ladders[mode]]
+                        st.table(pd.DataFrame(rows))
+
+            # ===== Risk Management =====
+            st.markdown("<div class='section-title'>🛡️ Risk Management</div>", unsafe_allow_html=True)
+            risk_info = compute_risk(capital, risk_pct, lot_size, plan, last["Close"])
+            if risk_info.get("status") != "OK":
+                st.write(risk_info.get("message", "Risk tidak dapat dihitung."))
+            else:
+                r = risk_info
+                risk_df = pd.DataFrame({
+                    "Parameter": [
+                        "Modal",
+                        "Risk per trade (%)",
+                        "Risk maksimal (nominal)",
+                        "Entry rata-rata",
+                        "Stop loss",
+                        "Risk per saham",
+                        "Lot maksimum",
+                        "Jumlah saham",
+                        "Nilai posisi (approx)",
+                        "Risk nominal yang dipakai"
+                    ],
+                    "Nilai": [
+                        r["capital"],
+                        r["risk_pct"],
+                        r["max_risk_money"],
+                        r["entry_mid"],
+                        r["stop"],
+                        r["risk_per_share"],
+                        r["max_lot"],
+                        r["shares"],
+                        r["position_value"],
+                        r["used_risk_money"],
+                    ]
+                })
+                st.table(risk_df)
+
+            # ===== CHART DENGAN ALTAIR =====
             st.markdown("<div class='section-title'>📈 Chart Harga & Indikator</div>", unsafe_allow_html=True)
 
             chart_data = df_ind.copy().reset_index()
@@ -695,12 +975,7 @@ else:
 # ===================== FOOTER =====================
 st.markdown("""
 <div class='footer-text'>
-Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume · Data dari Yahoo Finance.<br>
+Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · Data dari Yahoo Finance.<br>
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
