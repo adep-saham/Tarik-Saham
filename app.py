@@ -969,6 +969,69 @@ if analyze_btn:
                 )
                 st.altair_chart(cci_chart.interactive(), use_container_width=True)
 
+# ===================== MULTI TICKER ANALYZER =====================
+st.sidebar.header("📦 Multi Ticker Scanner")
+multi_input = st.sidebar.text_area(
+    "Masukkan banyak ticker (pisahkan dengan koma):",
+    value="BBRI.JK, BBCA.JK, ANTM.JK",
+    help="Contoh: BBRI.JK, BBCA.JK, ANTM.JK, BUMI.JK"
+)
+scan_btn = st.sidebar.button("📡 Scan Semua Ticker", use_container_width=True)
+
+if scan_btn:
+    tickers = [t.strip().upper() for t in multi_input.split(",") if t.strip()]
+    results = []
+
+    st.markdown("<div class='section-title'>📡 Hasil Scan Multi Ticker</div>", unsafe_allow_html=True)
+
+    with st.spinner("Scanning semua ticker..."):
+        for tk in tickers:
+            try:
+                df = fetch_data(tk, period, interval)
+                if df.empty:
+                    results.append({
+                        "Ticker": tk,
+                        "Status": "Data Kosong"
+                    })
+                    continue
+
+                df_ind = calc_indicators(df)
+                last = df_ind.iloc[-1]
+
+                desc = interpret_last(last)
+                patterns = detect_patterns(df_ind)
+                plan = generate_entry_plan(df_ind)
+                conf = compute_confidence(df_ind, last, desc, patterns, plan)
+
+                results.append({
+                    "Ticker": tk,
+                    "Harga": safe_float(last["Close"]),
+                    "Trend": plan.get("trend", "-"),
+                    "Confidence": conf["score"],
+                    "Entry Type": plan.get("entry_type", "-"),
+                    "RR": plan.get("RR", np.nan),
+                    "VolSpike": plan.get("vol_ratio20"),
+                    "Status": plan.get("status"),
+                })
+
+            except Exception as e:
+                results.append({
+                    "Ticker": tk,
+                    "Status": f"Error: {str(e)}"
+                })
+
+    df_rank = pd.DataFrame(results)
+
+    # urutkan berdasarkan confidence terbesar
+    if "Confidence" in df_rank.columns:
+        df_rank = df_rank.sort_values("Confidence", ascending=False)
+
+    st.dataframe(df_rank)
+
+    # highlight ticker top pick
+    st.success("Scan selesai! Pilih ticker dengan Confidence > 70% untuk peluang terbaik.")
+
+
 else:
     st.info("Masukkan kode saham di sidebar, lalu klik tombol **🚀 Analisa Saham**.")
 
@@ -979,3 +1042,4 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
