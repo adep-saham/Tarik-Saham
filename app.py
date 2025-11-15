@@ -70,7 +70,7 @@ st.markdown("""
 # TELEGRAM CONFIG (TOKEN ONLY)
 # ==========================
 
-TELEGRAM_TOKEN = 8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE  # TIDAK muncul di UI
+TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"  # TIDAK muncul di UI
 
 
 # ===================== SIDEBAR INPUT =====================
@@ -1161,6 +1161,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
