@@ -5,35 +5,49 @@ import yfinance as yf
 from datetime import datetime
 import altair as alt
 
-# ==========================
-# TELEGRAM CONFIG (TOKEN ONLY)
-# ==========================
-
-TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"  # TIDAK muncul di UI
-
 # ========================
 # FUNGSI TELEGRAM
 # ========================
 
-st.sidebar.header("📢 Telegram Alerts")
-telegram_chat = st.sidebar.text_input("Chat ID Telegram")
-send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
+import requests  # pastikan ada di bagian import
+
+TELEGRAM_TOKEN = "8214976664:AAHNNAzjAema7k-3hh87nITTl9OvsHhY6UE"   # <— hardcode di sini
 
 def send_telegram(msg, chat_id):
-    import requests
+    """
+    Kirim pesan Telegram pakai token yang di-hardcode.
+    chat_id diambil dari input user (sidebar).
+    """
+
+    if not TELEGRAM_TOKEN:
+        print("TELEGRAM_TOKEN belum diisi.")
+        return
+
     if not chat_id:
+        print("chat_id kosong.")
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
+    payload = {
         "chat_id": chat_id,
         "text": msg,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
     }
+
     try:
-        requests.post(url, data=data)
+        resp = requests.post(url, data=payload)
+        if not resp.ok:
+            # tampilkan error supaya ketahuan kalau gagal
+            import streamlit as st
+            st.warning(f"Gagal kirim Telegram: {resp.status_code} - {resp.text}")
     except Exception as e:
-        print("Telegram Error:", e)
+        import streamlit as st
+        st.warning(f"Exception Telegram: {e}")
+
+
+st.sidebar.header("📢 Telegram Alerts")
+telegram_chat = st.sidebar.text_input("Chat ID Telegram")
+send_alerts = st.sidebar.checkbox("Aktifkan Alert Telegram", value=False)
 
 # ===================== PAGE CONFIG =====================
 st.set_page_config(
@@ -1157,6 +1171,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
