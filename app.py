@@ -1060,10 +1060,11 @@ if scan_btn:
     min_vol_ratio = st.sidebar.slider("Minimal Volume Spike (x)", 0.0, 3.0, 1.2, 0.1)
     ao_filter = st.sidebar.selectbox("AO harus", ["Tidak wajib", "Harus > 0"], index=1)
 
-# ===================== AUTO TOP PICKS =====================
+# ===================== AUTO TOP PICKS + TELEGRAM =====================
 if scan_btn and len(df_rank) > 0 and "Confidence" in df_rank.columns:
     st.markdown("<div class='section-title'>🏆 Top Picks Hari Ini</div>", unsafe_allow_html=True)
 
+    # Hanya saham yang bukan No Trade
     df_valid = df_rank[df_rank["Status"] != "No Trade"].copy()
     top_picks = df_valid.sort_values("Confidence", ascending=False).head(3)
 
@@ -1071,36 +1072,28 @@ if scan_btn and len(df_rank) > 0 and "Confidence" in df_rank.columns:
         st.info("Belum ada saham dengan sinyal kuat hari ini.")
     else:
         st.dataframe(top_picks)
+
+        # Tampilkan ringkas di layar
         for _, row in top_picks.iterrows():
             st.success(
                 f"**{row['Ticker']}** – Confidence **{row['Confidence']:.0f}%** "
                 f"| Trend: **{row['Trend']}** | Entry: **{row['Entry Type']}**"
             )
 
-    
-    # highlight ticker top pick
-    st.success("Scan selesai! Pilih ticker dengan Confidence > 70% untuk peluang terbaik.")
+        # Kirim ke Telegram (jika user aktifkan & isi Chat ID)
+        if send_alerts and telegram_chat:
+            for _, row in top_picks.iterrows():
+                msg = (
+                    f"🔥 *ALERT: {row['Ticker']}*\n"
+                    f"Trend: {row['Trend']}\n"
+                    f"Confidence: {row['Confidence']:.0f}%\n"
+                    f"Entry: {row['Entry Type']}\n"
+                    f"RR: {row['RR']}\n"
+                    f"Volume Spike: {row['VolSpike']}"
+                )
+                send_telegram(msg, telegram_chat)
 
-
-else:
-    st.info("Masukkan kode saham di sidebar, lalu klik tombol **🚀 Analisa Saham**.")
-
-# ===================== TELEGRAM ALERT =====================
-if send_alerts and telegram_chat:
-    for _, row in top_picks.iterrows():
-
-        msg = (
-            f"🔥 *ALERT: {row['Ticker']}*\n"
-            f"Trend: {row['Trend']}\n"
-            f"Confidence: {row['Confidence']:.0f}%\n"
-            f"Entry: {row['Entry Type']}\n"
-            f"RR: {row['RR']}\n"
-            f"Volume Spike: {row['VolSpike']}"
-        )
-
-        send_telegram(msg, telegram_chat)
-
-    st.success("Alert Telegram dikirim!")
+            st.success("Alert Telegram dikirim!")
 
 # ===================== SCREENER KUSTOM =====================
 if scan_btn:
@@ -1161,6 +1154,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume, Pola & Risk · D
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
