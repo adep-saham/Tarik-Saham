@@ -383,33 +383,38 @@ def generate_entry_plan(df: pd.DataFrame):
     Generator entry/exit sederhana:
     - Setup Breakout: strong uptrend + breakout 20 bar + AO & volume mendukung
     - Setup Pullback: uptrend + %R oversold (pullback ke EMA20)
+    Semua nilai penting dipaksa jadi float (safe_float) supaya tidak ada ValueError.
     """
     if len(df) < 30:
         return {"status": "Data terlalu pendek untuk membuat trading plan (butuh ≥ 30 bar)."}
 
     last = df.iloc[-1]
-    close = safe_float(last["Close"])
-    ema20 = safe_float(last["EMA20"])
-    ema50 = safe_float(last["EMA50"])
-    atr = safe_float(last.get("ATR14"))
-    wr = safe_float(last["WR14"])
-    ao = safe_float(last["AO"])
-    vol = safe_float(last["Volume"])
-    vol_ma20 = safe_float(last["VOL_MA20"])
 
-    vol_ratio = np.nan
-    if not np.isnan(vol_ma20) and vol_ma20 != 0:
-        vol_ratio = vol / vol_ma20
+    close = safe_float(last.get("Close"))
+    ema20 = safe_float(last.get("EMA20"))
+    ema50 = safe_float(last.get("EMA50"))
+    atr   = safe_float(last.get("ATR14"))
+    wr    = safe_float(last.get("WR14"))
+    ao    = safe_float(last.get("AO"))
+    vol   = safe_float(last.get("Volume"))
+    vol_ma20 = safe_float(last.get("VOL_MA20"))
 
-    support_20 = df["Low"].rolling(20).min().iloc[-1]
-    resist_20 = df["High"].rolling(20).max().iloc[-1]
+    # support / resistance 20 bar
+    support_20 = safe_float(df["Low"].rolling(20).min().iloc[-1])
+    resist_20  = safe_float(df["High"].rolling(20).max().iloc[-1])
 
+    # fallback ATR kalau belum ada
     if np.isnan(atr) or atr == 0:
         atr = safe_float((df["High"] - df["Low"]).rolling(14).mean().iloc[-1])
 
+    # Volume ratio
+    vol_ratio = np.nan
+    if not np.isnan(vol) and not np.isnan(vol_ma20) and vol_ma20 != 0:
+        vol_ratio = vol / vol_ma20
+
     # Klasifikasi trend
     trend = "unknown"
-    if not np.isnan(ema20) and not np.isnan(ema50) and not np.isnan(close):
+    if not any(np.isnan(x) for x in [close, ema20, ema50]):
         if ema20 > ema50 and close > ema20:
             trend = "strong_up"
         elif ema20 > ema50:
@@ -421,66 +426,81 @@ def generate_entry_plan(df: pd.DataFrame):
 
     plan = {}
 
-    # Breakout?
+    # ---------- Breakout 20-bar? ----------
     breakout = False
-    if len(df) >= 20:
-        prev_high_20 = df["Close"].rolling(20).max().iloc[-2]
-        if close > prev_high_20:
+    if len(df) >= 20 and not np.isnan(close):
+        prev_high_20 = safe_float(df["Close"].rolling(20).max().iloc[-2])
+        if not np.isnan(prev_high_20) and close > prev_high_20:
             breakout = True
 
-    # Setup Breakout
-    if trend == "strong_up" and breakout and ao > 0 and (np.isnan(vol_ratio) or vol_ratio >= 1.5):
-        entry_low = close - 0.5 * atr
+    # ---------- Setup Breakout ----------
+    if (trend == "strong_up"
+        and breakout
+        and ao > 0
+        and (np.isnan(vol_ratio) or vol_ratio >= 1.5)
+        and not np.isnan(atr)
+        and atr > 0):
+
+        entry_low  = close - 0.5 * atr
         entry_high = close + 0.2 * atr
-        stop = close - 1.8 * atr
-        target = close + 3.0 * atr
-        entry_mid = (entry_low + entry_high) / 2
-        rr = (target - entry_mid) / (entry_mid - stop) if (entry_mid - stop) != 0 else np.nan
+        stop       = close - 1.8 * atr
+        target     = close + 3.0 * atr
+        entry_mid  = (entry_low + entry_high) / 2
+
+        rr = np.nan
+        if entry_mid > stop:
+            rr = (target - entry_mid) / (entry_mid - stop)
+
         plan.update({
-            "status": "Setup Breakout",
+            "status"    : "Setup Breakout",
             "entry_type": "Breakout Follow",
-            "entry_low": entry_low,
+            "entry_low" : entry_low,
             "entry_high": entry_high,
-            "stop": stop,
-            "target": target,
-            "RR": rr,
-            "note": "Breakout uptrend dengan volume & momentum mendukung."
+            "stop"      : stop,
+            "target"    : target,
+            "RR"        : rr,
+            "note"      : "Breakout uptrend dengan volume & momentum mendukung."
         })
 
-    # Setup Pullback ke EMA20
-    elif trend in ["strong_up", "up"] and wr <= -80:
-        entry_low = ema20 - 0.5 * atr
+    # ---------- Setup Pullback ke EMA20 ----------
+    elif trend in ["strong_up", "up"] and wr <= -80 and not np.isnan(ema20) and not np.isnan(ema50) and not np.isnan(atr):
+        entry_low  = ema20 - 0.5 * atr
         entry_high = ema20 + 0.5 * atr
-        stop = ema50 - 0.5 * atr
-        target = resist_20
-        entry_mid = (entry_low + entry_high) / 2
-        rr = (target - entry_mid) / (entry_mid - stop) if (entry_mid - stop) != 0 else np.nan
+        stop       = ema50 - 0.5 * atr if not np.isnan(ema50) else ema20 - 2 * atr
+        target     = resist_20 if not np.isnan(resist_20) else ema20 + 3 * atr
+        entry_mid  = (entry_low + entry_high) / 2
+
+        rr = np.nan
+        if entry_mid > stop:
+            rr = (target - entry_mid) / (entry_mid - stop)
+
         plan.update({
-            "status": "Setup Pullback",
+            "status"    : "Setup Pullback",
             "entry_type": "Pullback EMA20",
-            "entry_low": entry_low,
+            "entry_low" : entry_low,
             "entry_high": entry_high,
-            "stop": stop,
-            "target": target,
-            "RR": rr,
-            "note": "Uptrend, harga oversold vs %R(14) → peluang buy di sekitar EMA20."
+            "stop"      : stop,
+            "target"    : target,
+            "RR"        : rr,
+            "note"      : "Uptrend, harga oversold vs %R(14) → peluang buy di sekitar EMA20."
         })
 
-    # Tidak ada setup menarik
+    # ---------- Tidak ada setup menarik ----------
     else:
         plan.update({
-            "status": "No Trade",
+            "status"    : "No Trade",
             "entry_type": "Watchlist",
-            "note": "Sinyal belum ideal (trend lemah / tidak jelas / belum ada pullback menarik)."
+            "note"      : "Sinyal belum ideal (trend lemah / tidak jelas / belum ada pullback menarik)."
         })
 
-    plan["trend"] = trend
-    plan["ATR14"] = atr
+    plan["trend"]       = trend
+    plan["ATR14"]       = atr
     plan["vol_ratio20"] = vol_ratio
-    plan["support20"] = support_20
-    plan["resistance20"] = resist_20
+    plan["support20"]   = support_20
+    plan["resistance20"]= resist_20
 
     return plan
+
 
 # ===================== MAIN FLOW =====================
 if analyze_btn:
@@ -679,6 +699,7 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume · Data dari Yaho
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
