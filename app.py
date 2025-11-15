@@ -166,21 +166,24 @@ def calc_indicators(df: pd.DataFrame):
     df["MACDsignal"] = df["MACD"].ewm(span=9, adjust=False).mean()
     df["MACDhist"] = df["MACD"] - df["MACDsignal"]
 
-    # Volume MA20 & rasio (versi aman)
+    # Volume MA20 & rasio (versi simpel dan aman)
     df["VOL_MA20"] = df["Volume"].rolling(20).mean()
 
-    # jadikan Series 1-dim yang bersih
-    vol_series = pd.Series(df["Volume"].astype(float).values, index=df.index)
-    vol_ma_series = pd.Series(df["VOL_MA20"].astype(float).values, index=df.index)
+    # pakai numpy array 1D, apapun bentuk aslinya
+    vol_arr = np.asarray(df["Volume"], dtype="float64").reshape(-1)
+    vol_ma_arr = np.asarray(df["VOL_MA20"], dtype="float64").reshape(-1)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        ratio_series = vol_series / vol_ma_series
+        ratio = vol_arr / vol_ma_arr
 
-    # bersihkan inf dan jadikan array 1D
-    ratio_series = ratio_series.replace([np.inf, -np.inf], np.nan)
-    df["VolRatio20"] = ratio_series.values
+    # ganti inf / -inf jadi NaN
+    ratio[~np.isfinite(ratio)] = np.nan
+
+    # assign langsung ke kolom
+    df["VolRatio20"] = ratio
 
     return df
+
 
 def safe_float(val):
     """
@@ -666,5 +669,6 @@ Technical Analyzer · EMA, %R, CCI, AO, RSI, MACD, ATR, Volume · Data dari Yaho
 Gunakan sebagai alat bantu analisa, bukan rekomendasi beli/jual.
 </div>
 """, unsafe_allow_html=True)
+
 
 
