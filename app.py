@@ -30,7 +30,42 @@ from scanner.prefilter import prefilter_universe
 from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
 
+# ================== AUTO SYNC SCAN FUNCTION ==================
+def scan_window(window, universe):
+    """
+    Scan saham yang memenuhi kriteria sinkron
+    window: 30 / 60 / 120
+    universe: list ticker
+    """
+    results = []
 
+    for ticker in universe:
+        try:
+            df = load_price_data(
+                ticker,
+                period=f"{window}d",
+                interval="1d"
+            )
+
+            if df is None or len(df) < 50:
+                continue
+
+            # pastikan indikator sudah ada
+            df = calc_indicators(df)
+
+            ema20 = df["EMA20"].iloc[-1]
+            ema50 = df["EMA50"].iloc[-1]
+            rsi = df["RSI14"].iloc[-1]
+
+            # Kriteria dasar (sementara, untuk debug)
+            if ema20 >= ema50 and rsi > 45:
+                results.append(ticker)
+
+        except Exception:
+            continue
+
+    return results
+# =============================================================
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
 load_theme()
@@ -194,6 +229,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
