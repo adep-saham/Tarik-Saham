@@ -55,6 +55,7 @@ if analyze_btn:
         st.error("Data kosong / ticker tidak valid.")
         st.stop()
 
+    # ================= INDICATORS =================
     df_ind = calc_indicators(df)
     last = df_ind.iloc[-1]
 
@@ -70,7 +71,7 @@ if analyze_btn:
     risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
 
     # ================= BADGE =================
-    badge_text, badge_color = get_trade_badge(
+    badge_text, _ = get_trade_badge(
         conf["score"],
         plan.get("status"),
         plan.get("trend")
@@ -92,6 +93,7 @@ if analyze_btn:
 
     # ================= CORE METRICS =================
     c1, c2, c3, c4 = st.columns(4)
+
     c1.metric("Trend", desc.get("Trend EMA", "-"))
     c2.metric("Confidence", f"{conf['score']:.0f}%")
     c4.metric("Risk / Trade", f"{risk_pct:.1f}%")
@@ -122,10 +124,14 @@ if analyze_btn:
             f"Trend: **{plan.get('trend')}**"
         )
 
-    # ================= PRICE CHART + EMA =================
+    # ================= PRICE CHART + EMA + ZOOM =================
     st.markdown("### 📈 Price Chart (EMA20 / EMA50 / Entry / SL / TP)")
 
-    chart_df = df_ind.reset_index()
+    # 🔍 ZOOM OTOMATIS 60 CANDLE TERAKHIR
+    window = min(60, len(df_ind))
+    chart_src = df_ind.tail(window).copy()
+
+    chart_df = chart_src.reset_index()
     chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
 
     # Close price
@@ -143,20 +149,14 @@ if analyze_btn:
     ema20_line = (
         alt.Chart(chart_df)
         .mark_line(color="#22c55e", strokeDash=[4, 2])
-        .encode(
-            x="Date:T",
-            y="EMA20:Q"
-        )
+        .encode(x="Date:T", y="EMA20:Q")
     )
 
     # EMA50
     ema50_line = (
         alt.Chart(chart_df)
         .mark_line(color="#ef4444", strokeDash=[6, 3])
-        .encode(
-            x="Date:T",
-            y="EMA50:Q"
-        )
+        .encode(x="Date:T", y="EMA50:Q")
     )
 
     layers = [price_line, ema20_line, ema50_line]
