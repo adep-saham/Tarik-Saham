@@ -1,40 +1,58 @@
-import pandas as pd
 import requests
-from io import BytesIO
+import pandas as pd
+from pathlib import Path
 
-# === URL RESMI IDX (BISA BERUBAH, INI CONTOH POLA UMUM) ===
+# ===============================
+# IDX ENDPOINT (RESMI - DIPAKAI FRONTEND IDX)
+# ===============================
 IDX_URL = "https://www.idx.co.id/umbraco/surface/ListedCompany/GetListedCompany"
 
-def download_idx_list():
-    """
-    Download daftar saham IDX dan simpan sebagai CSV.
-    """
-    # IDX endpoint biasanya butuh POST
+def download_idx_universe(output_path="data/idx_universe.csv"):
+    print("🔽 Downloading IDX listed companies...")
+
     payload = {
         "start": 0,
-        "length": 1000  # ambil semua
+        "length": 1000,   # cukup untuk seluruh saham
     }
 
-    r = requests.post(IDX_URL, data=payload, timeout=30)
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+    }
+
+    r = requests.post(IDX_URL, data=payload, headers=headers, timeout=30)
     r.raise_for_status()
 
-    data = r.json()
-    records = data.get("data", [])
+    json_data = r.json()
+    records = json_data.get("data", [])
+
+    if not records:
+        raise RuntimeError("IDX response kosong, endpoint mungkin berubah")
 
     df = pd.DataFrame(records)
 
-    # Normalisasi kolom penting
+    # === NORMALISASI KOLOM PENTING ===
     df = df.rename(columns={
         "Code": "ticker",
         "Name": "name",
-        "ListingBoard": "board"
+        "ListingBoard": "board",
+        "Status": "status",
     })
 
-    df = df[["ticker", "name", "board"]]
-    df["ticker"] = df["ticker"].str.upper().str.strip()
+    df = df[["ticker", "name", "board", "status"]]
 
-    df.to_csv("data/idx_universe.csv", index=False)
-    print(f"Saved {len(df)} tickers to data/idx_universe.csv")
+    df["ticker"] = df["ticker"].str.upper().str.strip()
+    df["board"] = df["board"].str.upper().str.strip()
+    df["status"] = df["status"].str.upper().str.strip()
+
+    # === FILTER: HANYA SAHAM AKTIF ===
+    df = df[df["status"] == "AKTIF"]
+
+    # === PASTIKAN FOLDER ADA ===
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    df.to_csv(output_path, index=False)
+    print(f"✅ Saved {len(df)} saham ke {output_path}")
 
 if __name__ == "__main__":
-    download_idx_list()
+    download_idx_universe()
