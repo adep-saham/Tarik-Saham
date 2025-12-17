@@ -5,6 +5,7 @@ import altair as alt
 
 # ================= CORE =================
 from core.data_loader import fetch_data
+from core.data_loader import load_price_data
 from core.indicators import calc_indicators
 from core.ticker_utils import normalize_ticker
 from core.utils import safe_float
@@ -295,6 +296,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
