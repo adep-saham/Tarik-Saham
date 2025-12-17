@@ -165,8 +165,7 @@ with tab_scanner:
 
     st.markdown("### 🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
     st.caption(f"Universe saham IDX: **{len(IDX_UNIVERSE)} saham**")
-    st.write("DEBUG universe count:", len(IDX_UNIVERSE))
-
+    
     if st.button("🚀 Run Auto Scan"):
 
         with st.spinner("Running prefilter & sync analysis..."):
@@ -215,4 +214,5 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
