@@ -216,7 +216,7 @@ with tab_scanner:
 
         # === HASIL AKHIR ===
         final_sync = list(
-            set(sync_30) & set(sync_60) & set(sync_120)
+            (set(sync_30) & set(sync_60)) | (set(sync_30) & set(sync_120))
         )
 
         if not final_sync:
@@ -230,6 +230,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
