@@ -30,19 +30,28 @@ from scanner.prefilter import prefilter_universe
 from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
 
-IDX_UNIVERSE = load_idx_universe()
+
 # ================= PAGE =================
+st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
 load_theme()
 st.markdown("## 📊 Tarik Saham – ADP")
 
+# ================= LOAD UNIVERSE (IDX) =================
+@st.cache_data(ttl=24 * 3600)
+def get_universe():
+    return load_idx_universe()
+
+IDX_UNIVERSE = get_universe()
+
+# ================= TABS =================
 tab_single, tab_scanner = st.tabs([
     "🔎 Single Stock Analysis",
-    "🤖 Auto Sync Scanner"
+    "🤖 Auto Sync Stocks (30 / 60 / 120)"
 ])
 
-# =========================================================
+# ======================================================
 # 🔎 TAB 1 — SINGLE STOCK ANALYSIS
-# =========================================================
+# ======================================================
 with tab_single:
 
     (
@@ -61,7 +70,7 @@ with tab_single:
     if analyze_btn:
         st.session_state.run_single = True
 
-    if st.session_state.run_single:
+    if st.session_state.run_single and raw_ticker:
 
         ticker = normalize_ticker(raw_ticker)
         df = fetch_data(ticker, period, interval)
@@ -101,14 +110,14 @@ with tab_single:
         else:
             st.error("🔴 AVOID – Risiko dominan")
 
-        # ---------- ZOOM WINDOW ----------
-        zoom_window = st.select_slider(
-            "🔍 Analisa berdasarkan candle terakhir",
+        # ===== ZOOM =====
+        zoom = st.select_slider(
+            "🔍 Window Analisa",
             options=[30, 60, 120],
             value=30
         )
 
-        df_w = df_ind.tail(min(zoom_window, len(df_ind)))
+        df_w = df_ind.tail(min(zoom, len(df_ind)))
         last_w = df_w.iloc[-1]
         desc_w = interpret_last(last_w)
 
@@ -117,7 +126,7 @@ with tab_single:
         c2.metric("Confidence", f"{conf['score']:.0f}%")
         c3.metric("Risk / Trade", f"{risk_pct:.1f}%")
 
-        # ---------- CHART ----------
+        # ===== CHART =====
         chart_df = df_w.reset_index()
         chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
 
@@ -149,45 +158,50 @@ with tab_single:
             use_container_width=True
         )
 
-# =========================================================
+# ======================================================
 # 🤖 TAB 2 — AUTO SYNC SCANNER
-# =========================================================
+# ======================================================
 with tab_scanner:
 
-    st.markdown("### 🤖 Auto Sync Stocks (30 / 60 / 120)")
+    st.markdown("### 🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
+    st.caption(f"Universe saham IDX: **{len(IDX_UNIVERSE)} saham**")
 
     if st.button("🚀 Run Auto Scan"):
 
-        with st.spinner("Running screening & sync analysis..."):
+        with st.spinner("Running prefilter & sync analysis..."):
 
             shortlist = prefilter_universe(IDX_UNIVERSE)
             results = []
 
             for t in shortlist:
-                ticker = normalize_ticker(t)
-                df = fetch_data(ticker, "6mo", "1d")
-                if df.empty:
+                try:
+                    ticker = normalize_ticker(t)
+                    df = fetch_data(ticker, "6mo", "1d")
+                    if df.empty:
+                        continue
+
+                    df_ind = calc_indicators(df)
+                    last = df_ind.iloc[-1]
+
+                    plan = generate_entry_plan(df_ind)
+                    desc = interpret_last(last)
+                    patterns = detect_patterns(df_ind)
+                    conf = compute_confidence(df_ind, last, desc, patterns, plan)
+
+                    badges = check_sync(df_ind, plan, conf)
+                    consensus = consensus_rule(badges)
+
+                    if consensus in ["BUY", "EARLY"]:
+                        results.append({
+                            "Ticker": t,
+                            "30": badges[30],
+                            "60": badges[60],
+                            "120": badges[120],
+                            "Consensus": consensus
+                        })
+
+                except Exception:
                     continue
-
-                df_ind = calc_indicators(df)
-                last = df_ind.iloc[-1]
-
-                plan = generate_entry_plan(df_ind)
-                desc = interpret_last(last)
-                patterns = detect_patterns(df_ind)
-                conf = compute_confidence(df_ind, last, desc, patterns, plan)
-
-                badges = check_sync(df_ind, plan, conf)
-                consensus = consensus_rule(badges)
-
-                if consensus in ["BUY", "EARLY"]:
-                    results.append({
-                        "Ticker": t,
-                        "30": badges[30],
-                        "60": badges[60],
-                        "120": badges[120],
-                        "Consensus": consensus
-                    })
 
             if results:
                 df_res = pd.DataFrame(results)
@@ -197,8 +211,6 @@ with tab_scanner:
                 st.warning("Tidak ada saham sinkron saat ini.")
 
     st.caption(
-        "Auto Sync Scanner menampilkan saham dengan sinyal "
-        "multi-window yang selaras (30/60/120)."
+        "Auto Sync menampilkan saham dengan sinyal multi-window "
+        "yang sudah selaras (30/60/120)."
     )
-
-
