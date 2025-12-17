@@ -35,15 +35,20 @@ from scanner.sync_rules import consensus_rule
 def load_price_data(ticker, period="300d", interval="1d"):
     try:
         df = yf.download(
-            ticker,
+            tickers=ticker,
             period=period,
             interval=interval,
             auto_adjust=False,
-            progress=False
+            progress=False,
+            group_by="column"   # <<< INI KUNCI UTAMA
         )
 
         if df is None or df.empty:
             return None
+
+        # pastikan kolom flat (bukan multiindex)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
 
         return df
 
@@ -313,6 +318,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
