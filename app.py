@@ -13,6 +13,7 @@ from analysis.interpretation import interpret_last
 from analysis.patterns import detect_patterns
 from analysis.entry_plan import generate_entry_plan
 from analysis.confidence import compute_confidence
+from analysis.badge import get_trade_badge
 
 # ================= RISK =================
 from risk.ladders import build_ladders
@@ -56,15 +57,9 @@ if analyze_btn:
     df_ind = calc_indicators(df)
     last = df_ind.iloc[-1]
 
-    # ===== SAFE VALUES =====
+    # ===== SAFE PRICE =====
     close_price = safe_float(last.get("Close"))
     close_text = f"{close_price:.2f}" if not np.isnan(close_price) else "-"
-
-    # ================= HEADER INFO =================
-    st.caption(
-        f"**{ticker}** | {period} | {interval} | "
-        f"Close: **{close_text}**"
-    )
 
     # ================= ANALYSIS =================
     desc = interpret_last(last)
@@ -73,6 +68,28 @@ if analyze_btn:
     conf = compute_confidence(df_ind, last, desc, patterns, plan)
     risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
 
+    # ================= BADGE =================
+    badge_text, badge_color = get_trade_badge(
+        conf["score"],
+        plan.get("status"),
+        plan.get("trend")
+    )
+
+    # ================= HEADER =================
+    st.caption(
+        f"**{ticker}** | {period} | {interval} | "
+        f"Close: **{close_text}** | "
+        f"Decision: **{badge_text}**"
+    )
+
+    # ================= BADGE DISPLAY =================
+    if badge_text == "BUY":
+        st.success("🟢 **BUY** – Setup kuat, risk terukur.")
+    elif badge_text == "WAIT":
+        st.warning("🟡 **WAIT** – Tunggu konfirmasi lebih baik.")
+    else:
+        st.error("🔴 **AVOID** – Risiko lebih besar dari peluang.")
+
     # ================= CORE METRICS =================
     c1, c2, c3, c4 = st.columns(4)
 
@@ -80,11 +97,8 @@ if analyze_btn:
     c2.metric("Confidence", f"{conf['score']:.0f}%")
     c4.metric("Risk / Trade", f"{risk_pct:.1f}%")
 
-    # Entry Mid (SAFE)
     entry_mid = "-"
-    if plan.get("status") != "No Trade" \
-        and plan.get("entry_low") is not None \
-        and plan.get("entry_high") is not None:
+    if plan.get("status") != "No Trade":
         entry_mid_val = (plan["entry_low"] + plan["entry_high"]) / 2
         entry_mid = f"{entry_mid_val:.2f}"
 
@@ -96,7 +110,7 @@ if analyze_btn:
     st.markdown("### 🎯 Entry Plan")
 
     if plan.get("status") == "No Trade":
-        st.warning("No trade setup – wait.")
+        st.info("No trade setup – wait.")
     else:
         e1, e2, e3, e4 = st.columns(4)
         e1.metric("Buy Zone", f"{plan['entry_low']:.0f} – {plan['entry_high']:.0f}")
@@ -105,7 +119,10 @@ if analyze_btn:
         rr = plan.get("RR")
         e4.metric("RR", f"{rr:.2f}" if rr and not np.isnan(rr) else "-")
 
-        st.caption(f"Setup: **{plan.get('status')}** | Trend: **{plan.get('trend')}**")
+        st.caption(
+            f"Setup: **{plan.get('status')}** | "
+            f"Trend: **{plan.get('trend')}**"
+        )
 
     # ================= SIGNAL SUMMARY =================
     st.markdown("### 🧠 Signal Summary")
