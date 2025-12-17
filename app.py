@@ -122,15 +122,16 @@ if analyze_btn:
             f"Trend: **{plan.get('trend')}**"
         )
 
-    # ================= PRICE CHART =================
-    st.markdown("### 📈 Price Chart (Entry / SL / TP)")
+    # ================= PRICE CHART + EMA =================
+    st.markdown("### 📈 Price Chart (EMA20 / EMA50 / Entry / SL / TP)")
 
     chart_df = df_ind.reset_index()
     chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
 
+    # Close price
     price_line = (
         alt.Chart(chart_df)
-        .mark_line(color="#1f77b4")
+        .mark_line(color="#1f77b4", strokeWidth=2)
         .encode(
             x=alt.X("Date:T", title="Date"),
             y=alt.Y("Close:Q", title="Price"),
@@ -138,8 +139,29 @@ if analyze_btn:
         )
     )
 
-    layers = [price_line]
+    # EMA20
+    ema20_line = (
+        alt.Chart(chart_df)
+        .mark_line(color="#22c55e", strokeDash=[4, 2])
+        .encode(
+            x="Date:T",
+            y="EMA20:Q"
+        )
+    )
 
+    # EMA50
+    ema50_line = (
+        alt.Chart(chart_df)
+        .mark_line(color="#ef4444", strokeDash=[6, 3])
+        .encode(
+            x="Date:T",
+            y="EMA50:Q"
+        )
+    )
+
+    layers = [price_line, ema20_line, ema50_line]
+
+    # Entry / SL / TP
     if plan.get("status") != "No Trade":
         entry_low = plan["entry_low"]
         entry_high = plan["entry_high"]
@@ -171,7 +193,10 @@ if analyze_btn:
         use_container_width=True
     )
 
-    st.caption("🟦 Close | 🟩 Entry Zone | 🔴 Stop | 🟢 Target")
+    st.caption(
+        "🟦 Close | 🟢 EMA20 | 🔴 EMA50 | "
+        "🟩 Entry Zone | 🔴 Stop | 🟢 Target"
+    )
 
     # ================= ENTRY LADDER =================
     if plan.get("status") != "No Trade":
