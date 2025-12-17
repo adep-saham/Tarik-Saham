@@ -126,17 +126,16 @@ if analyze_btn:
 
     # ================= ZOOM SLIDER =================
     st.markdown("### 🔍 Chart Zoom")
-    zoom_window = st.slider(
+
+    zoom_window = st.select_slider(
         "Jumlah candle ditampilkan",
         options=[30, 60, 120],
         value=30
     )
-
-    # ================= PRICE CHART + EMA =================
-    st.markdown(f"### 📈 Price Chart ({zoom_window} Candle Terakhir)")
-
+    
     window = min(zoom_window, len(df_ind))
     chart_src = df_ind.tail(window).copy()
+
 
     chart_df = chart_src.reset_index()
     chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
@@ -226,3 +225,4 @@ if analyze_btn:
         st.warning(risk.get("message", "Risk tidak dapat dihitung."))
 
     st.caption("Bukan rekomendasi beli/jual. Gunakan risk management.")
+
