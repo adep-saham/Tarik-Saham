@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-
+import yfinance as yf
 # ================= CORE =================
 from core.data_loader import fetch_data
-from core.data_loader import load_price_data
 from core.indicators import calc_indicators
 from core.ticker_utils import normalize_ticker
 from core.utils import safe_float
@@ -32,6 +31,24 @@ from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
 
 # ================== AUTO SYNC SCAN FUNCTION ==================
+
+def load_price_data(ticker, period="300d", interval="1d"):
+    try:
+        df = yf.download(
+            ticker,
+            period=period,
+            interval=interval,
+            auto_adjust=False,
+            progress=False
+        )
+
+        if df is None or df.empty:
+            return None
+
+        return df
+
+    except Exception:
+        return None
 
 def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -296,6 +313,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
