@@ -124,17 +124,17 @@ if analyze_btn:
             f"Trend: **{plan.get('trend')}**"
         )
 
-    # ================= PRICE CHART + EMA + ZOOM =================
-    st.markdown("### 📈 Price Chart (EMA20 / EMA50 / Entry / SL / TP)")
+    # ================= PRICE CHART + EMA (DEFAULT 30 CANDLE) =================
+    st.markdown("### 📈 Price Chart (30 Candle Terakhir)")
+    st.caption("🔍 Chart menampilkan **30 candle terakhir**")
 
-    # 🔍 ZOOM OTOMATIS 60 CANDLE TERAKHIR
-    window = min(60, len(df_ind))
+    window = min(30, len(df_ind))
     chart_src = df_ind.tail(window).copy()
 
     chart_df = chart_src.reset_index()
     chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
 
-    # Close price
+    # Close
     price_line = (
         alt.Chart(chart_df)
         .mark_line(color="#1f77b4", strokeWidth=2)
@@ -163,25 +163,23 @@ if analyze_btn:
 
     # Entry / SL / TP
     if plan.get("status") != "No Trade":
-        entry_low = plan["entry_low"]
-        entry_high = plan["entry_high"]
-        stop = plan["stop"]
-        target = plan["target"]
-
         entry_band = (
-            alt.Chart(pd.DataFrame({"y1": [entry_low], "y2": [entry_high]}))
+            alt.Chart(pd.DataFrame({
+                "y1": [plan["entry_low"]],
+                "y2": [plan["entry_high"]]
+            }))
             .mark_rect(opacity=0.15, color="#22c55e")
             .encode(y="y1:Q", y2="y2:Q")
         )
 
         stop_line = (
-            alt.Chart(pd.DataFrame({"y": [stop]}))
+            alt.Chart(pd.DataFrame({"y": [plan["stop"]]}))
             .mark_rule(color="#ef4444", strokeDash=[6, 4])
             .encode(y="y:Q")
         )
 
         target_line = (
-            alt.Chart(pd.DataFrame({"y": [target]}))
+            alt.Chart(pd.DataFrame({"y": [plan["target"]]}))
             .mark_rule(color="#22c55e", strokeDash=[6, 4])
             .encode(y="y:Q")
         )
