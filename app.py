@@ -29,16 +29,16 @@ from risk.risk_management import compute_risk
 from ui.theme import load_theme
 from ui.sidebar import sidebar_inputs
 
+
 # ===============================
-# PAGE CONFIG & THEME
+# PAGE CONFIG
 # ===============================
 load_theme()
 
 st.markdown("## 📊 Tarik Saham – ADP")
-st.caption("EMA · %R · CCI · AO · RSI · MACD · ATR · Pola · Risk")
 
 # ===============================
-# SIDEBAR INPUT
+# SIDEBAR
 # ===============================
 (
     raw_ticker,
@@ -50,6 +50,7 @@ st.caption("EMA · %R · CCI · AO · RSI · MACD · ATR · Pola · Risk")
     analyze_btn
 ) = sidebar_inputs()
 
+
 # ===============================
 # MAIN FLOW
 # ===============================
@@ -59,8 +60,13 @@ if analyze_btn:
         st.error("Kode saham belum diisi.")
         st.stop()
 
-    # 🔑 NORMALISASI TICKER (ANTM → ANTM.JK)
     ticker = normalize_ticker(raw_ticker)
+
+    st.markdown(
+        f"**Ticker:** `{ticker}` &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"**Periode:** `{period}` &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"**Interval:** `{interval}`"
+    )
 
     with st.spinner(f"Mengambil data {ticker} ..."):
         df = fetch_data(ticker, period, interval)
@@ -70,15 +76,10 @@ if analyze_btn:
         st.stop()
 
     # ===============================
-    # DATA
+    # DATA HARGA
     # ===============================
-    st.subheader("📄 Data Harga (Ringkas)")
-    st.write(
-        f"Ticker: **{ticker}** | "
-        f"Baris: **{len(df)}** | "
-        f"Periode: **{df.index.min().date()} – {df.index.max().date()}**"
-    )
-    st.dataframe(df.tail())
+    st.markdown("### 📄 Data Harga (5 Terakhir)")
+    st.dataframe(df.tail().round(2), use_container_width=True)
 
     # ===============================
     # INDICATORS
@@ -87,18 +88,23 @@ if analyze_btn:
     last = df_ind.iloc[-1]
 
     # ===============================
-    # INTERPRETATION
+    # INTERPRETASI
     # ===============================
-    st.subheader("🧠 Interpretasi Otomatis")
+    st.markdown("### 🧠 Interpretasi Otomatis")
     desc = interpret_last(last)
-    for k, v in desc.items():
-        st.markdown(f"- **{k}** : {v}")
+
+    c1, c2, c3 = st.columns(3)
+    cols = [c1, c2, c3]
+
+    for i, (k, v) in enumerate(desc.items()):
+        cols[i % 3].info(f"**{k}**\n\n{v}")
 
     # ===============================
-    # PATTERNS
+    # POLA
     # ===============================
-    st.subheader("📌 Pola Teknikal")
+    st.markdown("### 📌 Pola Teknikal")
     patterns = detect_patterns(df_ind)
+
     if patterns:
         for p in patterns:
             st.markdown(f"- {p}")
@@ -108,22 +114,41 @@ if analyze_btn:
     # ===============================
     # ENTRY PLAN
     # ===============================
-    st.subheader("🎯 Rencana Entry & Exit")
+    st.markdown("### 🎯 Rencana Entry & Exit")
     plan = generate_entry_plan(df_ind)
-    st.json(plan)
+
+    if plan.get("status") == "No Trade":
+        st.warning("Belum ada setup trading yang valid.")
+    else:
+        m1, m2, m3, m4 = st.columns(4)
+
+        m1.metric("Entry Low", f"{plan['entry_low']:.2f}")
+        m2.metric("Entry High", f"{plan['entry_high']:.2f}")
+        m3.metric("Stop Loss", f"{plan['stop']:.2f}")
+        m4.metric("Target", f"{plan['target']:.2f}")
+
+        st.caption(
+            f"📌 **Setup:** {plan.get('status')} | "
+            f"**Trend:** {plan.get('trend')}"
+        )
 
     # ===============================
     # CONFIDENCE
     # ===============================
-    st.subheader("🔥 Confidence Score")
+    st.markdown("### 🔥 Confidence Score")
     conf = compute_confidence(df_ind, last, desc, patterns, plan)
-    st.metric("Confidence", f"{conf['score']:.0f}%")
-    st.caption(conf["label"])
+
+    st.metric(
+        label="Keyakinan Sinyal",
+        value=f"{conf['score']:.0f}%",
+        delta=conf["label"]
+    )
+    st.progress(conf["score"] / 100)
 
     # ===============================
-    # NARRATIVE
+    # NARASI
     # ===============================
-    st.subheader("🧾 Narasi Analis Otomatis")
+    st.markdown("### 🧾 Narasi Analis Otomatis")
     narrative = generate_narrative(
         ticker,
         last,
@@ -132,22 +157,31 @@ if analyze_btn:
         plan,
         conf
     )
-    st.markdown(narrative)
+    st.success(narrative)
 
     # ===============================
     # ENTRY LADDER
     # ===============================
-    st.subheader("🧱 Entry Ladder")
+    st.markdown("### 🧱 Entry Ladder")
     ladders = build_ladders(plan)
+
     if ladders.get("status") == "No Trade":
-        st.info("Belum ada setup entry yang valid.")
+        st.info("Tidak ada entry ladder (No Trade).")
     else:
-        st.json(ladders)
+        for mode, rows in ladders.items():
+            st.markdown(f"**{mode}**")
+            df_ladder = pd.DataFrame(rows, columns=["Porsi", "Harga"])
+            df_ladder["Porsi"] = (
+                (df_ladder["Porsi"] * 100)
+                .astype(int)
+                .astype(str) + "%"
+            )
+            st.table(df_ladder)
 
     # ===============================
     # RISK MANAGEMENT
     # ===============================
-    st.subheader("🛡️ Risk Management")
+    st.markdown("### 🛡️ Risk Management")
     risk_info = compute_risk(
         capital,
         risk_pct,
@@ -157,6 +191,9 @@ if analyze_btn:
     )
 
     if risk_info.get("status") != "OK":
-        st.warning(risk_info.get("message", "Risk tidak dapat dihitung."))
+        st.warning(risk_info.get("message", "Risk tidak valid."))
     else:
-        st.json(risk_info)
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Jumlah Saham", f"{risk_info['shares']:,}")
+        r2.metric("Nilai Posisi", f"{risk_info['position_value']:,.0f}")
+        r3.metric("Risk per Trade", f"{risk_pct}%")
