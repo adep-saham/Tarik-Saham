@@ -55,6 +55,10 @@ def scan_window(window, universe):
 
             df = calc_indicators(df)
             last = df.iloc[-1]
+           
+            st.write("DEBUG columns:", df.columns.tolist())
+            st.write("DEBUG last row:", last)
+            break
 
             ema20 = last["EMA20"]
             ema50 = last["EMA50"]
@@ -236,6 +240,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
