@@ -24,185 +24,179 @@ from risk.risk_management import compute_risk
 from ui.theme import load_theme
 from ui.sidebar import sidebar_inputs
 
+# ================= SCANNER =================
+from scanner.universe import IDX_UNIVERSE
+from scanner.prefilter import prefilter_universe
+from scanner.sync_engine import check_sync
+from scanner.sync_rules import consensus_rule
+
 
 # ================= PAGE =================
 load_theme()
 st.markdown("## 📊 Tarik Saham – ADP")
 
-(
-    raw_ticker,
-    period,
-    interval,
-    capital,
-    risk_pct,
-    lot_size,
-    analyze_btn
-) = sidebar_inputs()
+tab_single, tab_scanner = st.tabs([
+    "🔎 Single Stock Analysis",
+    "🤖 Auto Sync Scanner"
+])
 
-# ================= STATE =================
-if "run_analysis" not in st.session_state:
-    st.session_state.run_analysis = False
+# =========================================================
+# 🔎 TAB 1 — SINGLE STOCK ANALYSIS
+# =========================================================
+with tab_single:
 
-if analyze_btn:
-    st.session_state.run_analysis = True
+    (
+        raw_ticker,
+        period,
+        interval,
+        capital,
+        risk_pct,
+        lot_size,
+        analyze_btn
+    ) = sidebar_inputs()
 
-# ================= ANALYZE ONCE =================
-if st.session_state.run_analysis:
+    if "run_single" not in st.session_state:
+        st.session_state.run_single = False
 
-    ticker = normalize_ticker(raw_ticker)
-    df = fetch_data(ticker, period, interval)
+    if analyze_btn:
+        st.session_state.run_single = True
 
-    if df.empty:
-        st.error("Data kosong / ticker tidak valid.")
-        st.stop()
+    if st.session_state.run_single:
 
-    df_ind = calc_indicators(df)
-    last_full = df_ind.iloc[-1]
+        ticker = normalize_ticker(raw_ticker)
+        df = fetch_data(ticker, period, interval)
 
-    close_price = safe_float(last_full.get("Close"))
-    close_text = f"{close_price:.2f}" if not np.isnan(close_price) else "-"
+        if df.empty:
+            st.error("Data kosong / ticker tidak valid.")
+            st.stop()
 
-    # ===== FULL ANALYSIS (ONCE) =====
-    desc_full = interpret_last(last_full)
-    patterns_full = detect_patterns(df_ind)
-    plan_full = generate_entry_plan(df_ind)
-    conf_full = compute_confidence(df_ind, last_full, desc_full, patterns_full, plan_full)
-    risk_full = compute_risk(capital, risk_pct, lot_size, plan_full, close_price)
+        df_ind = calc_indicators(df)
+        last = df_ind.iloc[-1]
 
-    # ===== MULTI WINDOW ANALYSIS =====
-    windows = [30, 60, 120]
-    window_results = {}
+        close_price = safe_float(last.get("Close"))
+        close_text = f"{close_price:.2f}" if not np.isnan(close_price) else "-"
 
-    for w in windows:
-        df_w = df_ind.tail(min(w, len(df_ind))).copy()
+        desc = interpret_last(last)
+        patterns = detect_patterns(df_ind)
+        plan = generate_entry_plan(df_ind)
+        conf = compute_confidence(df_ind, last, desc, patterns, plan)
+        risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
+
+        badge_text, _ = get_trade_badge(
+            conf["score"],
+            plan.get("status"),
+            plan.get("trend")
+        )
+
+        st.caption(
+            f"**{ticker}** | {period} | {interval} | "
+            f"Close: **{close_text}** | "
+            f"Decision: **{badge_text}**"
+        )
+
+        if badge_text == "BUY":
+            st.success("🟢 BUY – Setup kuat")
+        elif badge_text == "WAIT":
+            st.warning("🟡 WAIT – Tunggu konfirmasi")
+        else:
+            st.error("🔴 AVOID – Risiko dominan")
+
+        # ---------- ZOOM WINDOW ----------
+        zoom_window = st.select_slider(
+            "🔍 Analisa berdasarkan candle terakhir",
+            options=[30, 60, 120],
+            value=30
+        )
+
+        df_w = df_ind.tail(min(zoom_window, len(df_ind)))
         last_w = df_w.iloc[-1]
-
         desc_w = interpret_last(last_w)
-        patterns_w = detect_patterns(df_w)
 
-        badge_w, _ = get_trade_badge(
-            conf_full["score"],
-            plan_full.get("status"),
-            desc_w.get("Trend EMA")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Trend", desc_w.get("Trend EMA", "-"))
+        c2.metric("Confidence", f"{conf['score']:.0f}%")
+        c3.metric("Risk / Trade", f"{risk_pct:.1f}%")
+
+        # ---------- CHART ----------
+        chart_df = df_w.reset_index()
+        chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
+
+        price = alt.Chart(chart_df).mark_line(color="#1f77b4").encode(
+            x="Date:T", y="Close:Q"
         )
 
-        window_results[w] = {
-            "desc": desc_w,
-            "patterns": patterns_w,
-            "badge": badge_w,
-            "df": df_w
-        }
+        ema20 = alt.Chart(chart_df).mark_line(
+            color="#22c55e", strokeDash=[4, 2]
+        ).encode(x="Date:T", y="EMA20:Q")
 
-    # ===== CONSENSUS BADGE =====
-    badge_values = [window_results[w]["badge"] for w in windows]
+        ema50 = alt.Chart(chart_df).mark_line(
+            color="#ef4444", strokeDash=[6, 3]
+        ).encode(x="Date:T", y="EMA50:Q")
 
-    if badge_values.count("BUY") >= 2:
-        consensus = "BUY"
-    elif badge_values.count("AVOID") >= 2:
-        consensus = "AVOID"
-    else:
-        consensus = "WAIT"
+        layers = [price, ema20, ema50]
 
-    # ================= HEADER =================
+        if plan.get("status") != "No Trade":
+            entry_band = alt.Chart(pd.DataFrame({
+                "y1": [plan["entry_low"]],
+                "y2": [plan["entry_high"]]
+            })).mark_rect(opacity=0.15, color="#22c55e").encode(
+                y="y1:Q", y2="y2:Q"
+            )
+            layers.append(entry_band)
+
+        st.altair_chart(
+            alt.layer(*layers).interactive(),
+            use_container_width=True
+        )
+
+# =========================================================
+# 🤖 TAB 2 — AUTO SYNC SCANNER
+# =========================================================
+with tab_scanner:
+
+    st.markdown("### 🤖 Auto Sync Stocks (30 / 60 / 120)")
+
+    if st.button("🚀 Run Auto Scan"):
+
+        with st.spinner("Running screening & sync analysis..."):
+
+            shortlist = prefilter_universe(IDX_UNIVERSE)
+            results = []
+
+            for t in shortlist:
+                ticker = normalize_ticker(t)
+                df = fetch_data(ticker, "6mo", "1d")
+                if df.empty:
+                    continue
+
+                df_ind = calc_indicators(df)
+                last = df_ind.iloc[-1]
+
+                plan = generate_entry_plan(df_ind)
+                desc = interpret_last(last)
+                patterns = detect_patterns(df_ind)
+                conf = compute_confidence(df_ind, last, desc, patterns, plan)
+
+                badges = check_sync(df_ind, plan, conf)
+                consensus = consensus_rule(badges)
+
+                if consensus in ["BUY", "EARLY"]:
+                    results.append({
+                        "Ticker": t,
+                        "30": badges[30],
+                        "60": badges[60],
+                        "120": badges[120],
+                        "Consensus": consensus
+                    })
+
+            if results:
+                df_res = pd.DataFrame(results)
+                st.success(f"Ditemukan {len(df_res)} saham sinkron")
+                st.dataframe(df_res, use_container_width=True)
+            else:
+                st.warning("Tidak ada saham sinkron saat ini.")
+
     st.caption(
-        f"**{ticker}** | {period} | {interval} | "
-        f"Close: **{close_text}**"
+        "Auto Sync Scanner menampilkan saham dengan sinyal "
+        "multi-window yang selaras (30/60/120)."
     )
-
-    if consensus == "BUY":
-        st.success("🟢 **CONSENSUS BUY** – Mayoritas window mendukung.")
-    elif consensus == "WAIT":
-        st.warning("🟡 **CONSENSUS WAIT** – Belum sinkron.")
-    else:
-        st.error("🔴 **CONSENSUS AVOID** – Risiko dominan.")
-
-    # ================= WINDOW BADGES =================
-    st.markdown("### 🚦 Signal per Window")
-
-    b1, b2, b3 = st.columns(3)
-    b1.metric("30 Candle", window_results[30]["badge"])
-    b2.metric("60 Candle", window_results[60]["badge"])
-    b3.metric("120 Candle", window_results[120]["badge"])
-
-    # ================= ZOOM SLIDER =================
-    st.markdown("### 🔍 Chart Window")
-    zoom_window = st.select_slider(
-        "Pilih window chart",
-        options=[30, 60, 120],
-        value=30
-    )
-
-    df_chart = window_results[zoom_window]["df"]
-
-    # ================= PRICE CHART =================
-    chart_df = df_chart.reset_index()
-    chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
-
-    price_line = (
-        alt.Chart(chart_df)
-        .mark_line(color="#1f77b4", strokeWidth=2)
-        .encode(x="Date:T", y="Close:Q")
-    )
-
-    ema20 = (
-        alt.Chart(chart_df)
-        .mark_line(color="#22c55e", strokeDash=[4, 2])
-        .encode(x="Date:T", y="EMA20:Q")
-    )
-
-    ema50 = (
-        alt.Chart(chart_df)
-        .mark_line(color="#ef4444", strokeDash=[6, 3])
-        .encode(x="Date:T", y="EMA50:Q")
-    )
-
-    layers = [price_line, ema20, ema50]
-
-    if plan_full.get("status") != "No Trade":
-        entry_band = (
-            alt.Chart(pd.DataFrame({
-                "y1": [plan_full["entry_low"]],
-                "y2": [plan_full["entry_high"]]
-            }))
-            .mark_rect(opacity=0.15, color="#22c55e")
-            .encode(y="y1:Q", y2="y2:Q")
-        )
-
-        stop = (
-            alt.Chart(pd.DataFrame({"y": [plan_full["stop"]]}))
-            .mark_rule(color="#ef4444", strokeDash=[6, 4])
-            .encode(y="y:Q")
-        )
-
-        target = (
-            alt.Chart(pd.DataFrame({"y": [plan_full["target"]]}))
-            .mark_rule(color="#22c55e", strokeDash=[6, 4])
-            .encode(y="y:Q")
-        )
-
-        layers.extend([entry_band, stop, target])
-
-    st.altair_chart(
-        alt.layer(*layers).interactive(),
-        use_container_width=True
-    )
-
-    # ================= ENTRY PLAN =================
-    st.markdown("### 🎯 Entry Plan (Full Data)")
-    if plan_full.get("status") == "No Trade":
-        st.info("No trade setup.")
-    else:
-        e1, e2, e3 = st.columns(3)
-        e1.metric("Buy Zone", f"{plan_full['entry_low']:.0f} – {plan_full['entry_high']:.0f}")
-        e2.metric("Stop", f"{plan_full['stop']:.0f}")
-        e3.metric("Target", f"{plan_full['target']:.0f}")
-
-    # ================= RISK =================
-    st.markdown("### 🛡️ Risk Management")
-    if risk_full.get("status") == "OK":
-        r1, r2, r3 = st.columns(3)
-        r1.metric("Shares", f"{risk_full['shares']:,}")
-        r2.metric("Position Value", f"{risk_full['position_value']:,.0f}")
-        r3.metric("Risk / Trade", f"{risk_pct:.1f}%")
-
-    st.caption("Bukan rekomendasi beli/jual. Gunakan risk management.")
