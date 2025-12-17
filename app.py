@@ -25,7 +25,7 @@ from ui.theme import load_theme
 from ui.sidebar import sidebar_inputs
 
 # ================= SCANNER =================
-from scanner.universe import IDX_UNIVERSE
+from scanner.universe import load_idx_universe
 from scanner.prefilter import prefilter_universe
 from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
@@ -200,3 +200,4 @@ with tab_scanner:
         "Auto Sync Scanner menampilkan saham dengan sinyal "
         "multi-window yang selaras (30/60/120)."
     )
+
