@@ -39,8 +39,15 @@ st.markdown("## 📊 Tarik Saham – ADP")
     analyze_btn
 ) = sidebar_inputs()
 
-# ================= MAIN =================
+# ================= STATE FIX =================
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
+
 if analyze_btn:
+    st.session_state.run_analysis = True
+
+# ================= MAIN =================
+if st.session_state.run_analysis:
 
     if not raw_ticker:
         st.error("Kode saham belum diisi.")
@@ -132,10 +139,12 @@ if analyze_btn:
         options=[30, 60, 120],
         value=30
     )
-    
+
+    # ================= PRICE CHART + EMA =================
+    st.markdown(f"### 📈 Price Chart ({zoom_window} Candle Terakhir)")
+
     window = min(zoom_window, len(df_ind))
     chart_src = df_ind.tail(window).copy()
-
 
     chart_df = chart_src.reset_index()
     chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
@@ -225,4 +234,3 @@ if analyze_btn:
         st.warning(risk.get("message", "Risk tidak dapat dihitung."))
 
     st.caption("Bukan rekomendasi beli/jual. Gunakan risk management.")
-
