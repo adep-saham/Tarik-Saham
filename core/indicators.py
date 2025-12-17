@@ -44,6 +44,18 @@ def calc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["MACDhist"] = df["MACD"] - df["MACDsignal"]
 
     df["VOL_MA20"] = df["Volume"].rolling(20).mean()
-    df["VolRatio20"] = df["Volume"] / df["VOL_MA20"]
+    # ===== Volume MA20 & Ratio (SAFE VERSION) =====
+    df["VOL_MA20"] = df["Volume"].rolling(20).mean()
+    
+    vol_arr = np.asarray(df["Volume"], dtype="float64").reshape(-1)
+    vol_ma_arr = np.asarray(df["VOL_MA20"], dtype="float64").reshape(-1)
+    
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = vol_arr / vol_ma_arr
+    
+    ratio[~np.isfinite(ratio)] = np.nan
+    df["VolRatio20"] = ratio
+
 
     return df
+
