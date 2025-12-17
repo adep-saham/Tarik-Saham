@@ -58,7 +58,8 @@ def scan_window(window, universe):
             rsi = df["RSI14"].iloc[-1]
 
             # Kriteria dasar (sementara, untuk debug)
-            if ema20 >= ema50 and rsi > 45:
+            if ema20 >= ema50 * 0.99 and rsi >= 40:
+
                 results.append(ticker)
 
         except Exception:
@@ -229,6 +230,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
