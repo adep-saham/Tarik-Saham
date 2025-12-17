@@ -164,55 +164,36 @@ with tab_single:
 with tab_scanner:
 
     st.markdown("### 🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
-    st.caption(f"Universe saham IDX: **{len(IDX_UNIVERSE)} saham**")
-    
+
     if st.button("🚀 Run Auto Scan"):
 
-        with st.spinner("Running prefilter & sync analysis..."):
+        # === PROSES SCAN ===
+        sync_30 = scan_window(30, IDX_UNIVERSE)
+        sync_60 = scan_window(60, IDX_UNIVERSE)
+        sync_120 = scan_window(120, IDX_UNIVERSE)
 
-            shortlist = prefilter_universe(IDX_UNIVERSE)
-            results = []
+        # === DEBUG JUMLAH (INI YANG KAMU TANYA) ===
+        st.write("Universe:", len(IDX_UNIVERSE))
+        st.write("Lolos window 30:", len(sync_30))
+        st.write("Lolos window 60:", len(sync_60))
+        st.write("Lolos window 120:", len(sync_120))
 
-            for t in shortlist:
-                try:
-                    ticker = normalize_ticker(t)
-                    df = fetch_data(ticker, "6mo", "1d")
-                    if df.empty:
-                        continue
+        # === HASIL AKHIR ===
+        final_sync = list(
+            set(sync_30) & set(sync_60) & set(sync_120)
+        )
 
-                    df_ind = calc_indicators(df)
-                    last = df_ind.iloc[-1]
+        if not final_sync:
+            st.warning("Tidak ada saham sinkron saat ini.")
+        else:
+            st.success(f"Ditemukan {len(final_sync)} saham sinkron")
+            st.dataframe(final_sync)
 
-                    plan = generate_entry_plan(df_ind)
-                    desc = interpret_last(last)
-                    patterns = detect_patterns(df_ind)
-                    conf = compute_confidence(df_ind, last, desc, patterns, plan)
-
-                    badges = check_sync(df_ind, plan, conf)
-                    consensus = consensus_rule(badges)
-
-                    if consensus in ["BUY", "EARLY"]:
-                        results.append({
-                            "Ticker": t,
-                            "30": badges[30],
-                            "60": badges[60],
-                            "120": badges[120],
-                            "Consensus": consensus
-                        })
-
-                except Exception:
-                    continue
-
-            if results:
-                df_res = pd.DataFrame(results)
-                st.success(f"Ditemukan {len(df_res)} saham sinkron")
-                st.dataframe(df_res, use_container_width=True)
-            else:
-                st.warning("Tidak ada saham sinkron saat ini.")
 
     st.caption(
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
