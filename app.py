@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import altair as alt
 
 # ================= CORE =================
 from core.data_loader import fetch_data
@@ -57,7 +58,7 @@ if analyze_btn:
     df_ind = calc_indicators(df)
     last = df_ind.iloc[-1]
 
-    # ===== SAFE PRICE =====
+    # ================= SAFE VALUES =================
     close_price = safe_float(last.get("Close"))
     close_text = f"{close_price:.2f}" if not np.isnan(close_price) else "-"
 
@@ -82,17 +83,15 @@ if analyze_btn:
         f"Decision: **{badge_text}**"
     )
 
-    # ================= BADGE DISPLAY =================
     if badge_text == "BUY":
         st.success("🟢 **BUY** – Setup kuat, risk terukur.")
     elif badge_text == "WAIT":
-        st.warning("🟡 **WAIT** – Tunggu konfirmasi lebih baik.")
+        st.warning("🟡 **WAIT** – Tunggu konfirmasi.")
     else:
         st.error("🔴 **AVOID** – Risiko lebih besar dari peluang.")
 
     # ================= CORE METRICS =================
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("Trend", desc.get("Trend EMA", "-"))
     c2.metric("Confidence", f"{conf['score']:.0f}%")
     c4.metric("Risk / Trade", f"{risk_pct:.1f}%")
@@ -103,7 +102,6 @@ if analyze_btn:
         entry_mid = f"{entry_mid_val:.2f}"
 
     c3.metric("Entry Mid", entry_mid)
-
     st.progress(conf["score"] / 100)
 
     # ================= ENTRY PLAN =================
@@ -124,13 +122,56 @@ if analyze_btn:
             f"Trend: **{plan.get('trend')}**"
         )
 
-    # ================= SIGNAL SUMMARY =================
-    st.markdown("### 🧠 Signal Summary")
+    # ================= PRICE CHART =================
+    st.markdown("### 📈 Price Chart (Entry / SL / TP)")
 
-    s1, s2, s3 = st.columns(3)
-    s1.info(f"EMA Trend\n**{desc.get('Trend EMA', '-')}**")
-    s2.info(f"Momentum\n**{desc.get('MACD', '-')}**")
-    s3.info(f"Volume\n**{desc.get('Volume', '-')}**")
+    chart_df = df_ind.reset_index()
+    chart_df = chart_df.rename(columns={chart_df.columns[0]: "Date"})
+
+    price_line = (
+        alt.Chart(chart_df)
+        .mark_line(color="#1f77b4")
+        .encode(
+            x=alt.X("Date:T", title="Date"),
+            y=alt.Y("Close:Q", title="Price"),
+            tooltip=["Date:T", "Close:Q"]
+        )
+    )
+
+    layers = [price_line]
+
+    if plan.get("status") != "No Trade":
+        entry_low = plan["entry_low"]
+        entry_high = plan["entry_high"]
+        stop = plan["stop"]
+        target = plan["target"]
+
+        entry_band = (
+            alt.Chart(pd.DataFrame({"y1": [entry_low], "y2": [entry_high]}))
+            .mark_rect(opacity=0.15, color="#22c55e")
+            .encode(y="y1:Q", y2="y2:Q")
+        )
+
+        stop_line = (
+            alt.Chart(pd.DataFrame({"y": [stop]}))
+            .mark_rule(color="#ef4444", strokeDash=[6, 4])
+            .encode(y="y:Q")
+        )
+
+        target_line = (
+            alt.Chart(pd.DataFrame({"y": [target]}))
+            .mark_rule(color="#22c55e", strokeDash=[6, 4])
+            .encode(y="y:Q")
+        )
+
+        layers.extend([entry_band, stop_line, target_line])
+
+    st.altair_chart(
+        alt.layer(*layers).interactive(),
+        use_container_width=True
+    )
+
+    st.caption("🟦 Close | 🟩 Entry Zone | 🔴 Stop | 🟢 Target")
 
     # ================= ENTRY LADDER =================
     if plan.get("status") != "No Trade":
@@ -154,5 +195,4 @@ if analyze_btn:
     else:
         st.warning(risk.get("message", "Risk tidak dapat dihitung."))
 
-    # ================= FOOTNOTE =================
     st.caption("Bukan rekomendasi beli/jual. Gunakan risk management.")
