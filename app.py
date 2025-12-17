@@ -30,7 +30,7 @@ from scanner.prefilter import prefilter_universe
 from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
 
-
+IDX_UNIVERSE = load_idx_universe()
 # ================= PAGE =================
 load_theme()
 st.markdown("## 📊 Tarik Saham – ADP")
@@ -200,4 +200,5 @@ with tab_scanner:
         "Auto Sync Scanner menampilkan saham dengan sinyal "
         "multi-window yang selaras (30/60/120)."
     )
+
 
