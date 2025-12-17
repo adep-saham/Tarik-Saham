@@ -124,11 +124,18 @@ if analyze_btn:
             f"Trend: **{plan.get('trend')}**"
         )
 
-    # ================= PRICE CHART + EMA (DEFAULT 30 CANDLE) =================
-    st.markdown("### 📈 Price Chart (30 Candle Terakhir)")
-    st.caption("🔍 Chart menampilkan **30 candle terakhir**")
+    # ================= ZOOM SLIDER =================
+    st.markdown("### 🔍 Chart Zoom")
+    zoom_window = st.slider(
+        "Jumlah candle ditampilkan",
+        options=[30, 60, 120],
+        value=30
+    )
 
-    window = min(30, len(df_ind))
+    # ================= PRICE CHART + EMA =================
+    st.markdown(f"### 📈 Price Chart ({zoom_window} Candle Terakhir)")
+
+    window = min(zoom_window, len(df_ind))
     chart_src = df_ind.tail(window).copy()
 
     chart_df = chart_src.reset_index()
