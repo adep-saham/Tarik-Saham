@@ -31,42 +31,102 @@ from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
 
 # ================== AUTO SYNC SCAN FUNCTION ==================
+
+def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # kalau MultiIndex kolom (sering dari yfinance)
+    if isinstance(df.columns, pd.MultiIndex):
+        # ambil level terakhir (Open/High/Low/Close/Volume)
+        df.columns = [c[-1] for c in df.columns]
+
+    # normalisasi nama kolom umum
+    rename_map = {}
+    for col in df.columns:
+        c = str(col).strip()
+        rename_map[col] = c
+
+    df = df.rename(columns=rename_map)
+
+    # kalau hanya ada Adj Close, jadikan Close
+    if "Close" not in df.columns and "Adj Close" in df.columns:
+        df["Close"] = df["Adj Close"]
+
+    # pastikan numeric
+    for c in ["Open", "High", "Low", "Close", "Volume"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    return df
+
+
 def scan_window(window, universe):
     results = []
 
     lookback = max(window * 3, 200)
 
+    # counter alasan gagal
+    c_none = 0
+    c_short = 0
+    c_no_close = 0
+    c_nan = 0
+    c_cond_fail = 0
+    c_exc = 0
+    first_exc = None
+
     for ticker in universe:
-
         try:
-            df = load_price_data(
-                ticker,
-                period=f"{lookback}d",
-                interval="1d"
-            )
+            df = load_price_data(ticker, period=f"{lookback}d", interval="1d")
 
-            if df is None or len(df) < 60:
+            if df is None or len(df) == 0:
+                c_none += 1
+                continue
+
+            if len(df) < 60:
+                c_short += 1
+                continue
+
+            # normalize kolom (multiindex / nama beda)
+            df = normalize_ohlcv(df)
+
+            if "Close" not in df.columns:
+                c_no_close += 1
                 continue
 
             df = calc_indicators(df)
             last = df.iloc[-1]
-           
-            st.write("DEBUG columns:", df.columns.tolist())
-            st.write("DEBUG last row:", last)
-            break
+
+            # pastikan kolom indikator ada
+            if not all(col in df.columns for col in ["EMA20", "EMA50", "RSI14"]):
+                c_no_close += 1
+                continue
 
             ema20 = last["EMA20"]
             ema50 = last["EMA50"]
-            rsi   = last["RSI14"]
+            rsi = last["RSI14"]
 
             if pd.isna(ema20) or pd.isna(ema50) or pd.isna(rsi):
+                c_nan += 1
                 continue
 
             if ema20 >= ema50 * 0.99 and rsi >= 40:
                 results.append(ticker)
+            else:
+                c_cond_fail += 1
 
-        except Exception:
-            continue
+        except Exception as e:
+            c_exc += 1
+            if first_exc is None:
+                first_exc = (ticker, repr(e))
+
+    # tampilkan ringkasan debug (sekali per run)
+    st.info(
+        f"DEBUG window {window} | results={len(results)} | "
+        f"none={c_none} short={c_short} no_close={c_no_close} "
+        f"nan_ind={c_nan} cond_fail={c_cond_fail} exc={c_exc}"
+    )
+    if first_exc:
+        st.warning(f"FIRST EXCEPTION: {first_exc[0]} -> {first_exc[1]}")
 
     return results
 
@@ -235,6 +295,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
