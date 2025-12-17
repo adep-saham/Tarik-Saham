@@ -38,11 +38,6 @@ def scan_window(window, universe):
 
     for ticker in universe:
 
-        # ===== QUICK TEST (SEMENTARA) =====
-        st.write("TEST ticker:", ticker)
-        break
-        # =================================
-
         try:
             df = load_price_data(
                 ticker,
@@ -240,6 +235,7 @@ with tab_scanner:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
