@@ -40,16 +40,17 @@ def backtest_mode(
             if decision != "BUY":
                 continue
 
-            entry_price = df.iloc[i]["Close"]
-            exit_price = df.iloc[i + holding_days]["Close"]
-
-            ret = (exit_price - entry_price) / entry_price * 100
-
+            entry_price = float(df.iloc[i]["Close"])
+            exit_price = float(df.iloc[i + holding_days]["Close"])
+            
+            ret = float((exit_price - entry_price) / entry_price * 100)
+            
             results.append({
                 "Ticker": ticker,
                 "Mode": mode,
                 "Return": ret
             })
+
 
     if not results:
         return None
