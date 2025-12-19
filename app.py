@@ -30,7 +30,7 @@ from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 
 # ================= RANGKING =================
 from scanner.ranking_engine import rank_sync_stocks
-
+from screener.decision_engine import decide_action
 
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
@@ -225,6 +225,16 @@ with tab_auto:
         )
     
         st.dataframe(df_rank, use_container_width=True)
+    if not df_rank.empty:
+        df_rank["Decision"] = df_rank.apply(decide_action, axis=1)
+    
+        st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
+        st.dataframe(
+            df_rank[
+                ["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]
+            ],
+            use_container_width=True
+        )
 
 
 
