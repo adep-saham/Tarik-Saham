@@ -233,6 +233,47 @@ with tab_single:
             (price + ema20 + ema50).interactive(),
             use_container_width=True
         )
+        # ===============================
+        # 🔍 RINGKASAN CEPAT
+        # ===============================
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Close", round(safe_float(last.get("Close")), 2))
+        c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
+        c3.metric("Trend", plan.get("trend", "-"))
+        c4.metric("Confidence", round(conf.get("score", 0), 2))
+        
+        
+        # ===============================
+        # 📌 ENTRY PLAN
+        # ===============================
+        with st.expander("📌 Entry Plan", expanded=True):
+            st.json(plan)
+        
+        
+        # ===============================
+        # 🧠 INTERPRETATION & PATTERN
+        # ===============================
+        with st.expander("🧠 Interpretation & Patterns", expanded=False):
+            st.write(desc)
+            st.json(patterns)
+        
+        
+        # ===============================
+        # 🛡️ RISK MANAGEMENT
+        # ===============================
+        with st.expander("🛡️ Risk Management", expanded=False):
+            if isinstance(risk, dict):
+                st.json(risk)
+            else:
+                st.dataframe(risk, use_container_width=True)
+        
+        
+        # ===============================
+        # 📊 CONFIDENCE DETAIL
+        # ===============================
+        with st.expander("📊 Confidence Detail", expanded=False):
+            st.json(conf)
+
 
 
 # ======================================================
@@ -361,3 +402,4 @@ with tab_auto:
             eq["step"] = range(len(eq))
             st.subheader("📈 Equity Curve")
             st.line_chart(eq.set_index("step")["Equity"])
+
