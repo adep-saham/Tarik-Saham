@@ -30,6 +30,7 @@ from scanner.scan_engine import scan_window
 from scanner.backtest_engine import backtest_mode
 from scanner.walkforward_engine import walk_forward_validate
 from scanner.equity_engine import build_equity_curve
+from scanner.auto_mode_engine import auto_switch_mode
 
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -114,11 +115,13 @@ st.caption(f"Universe IDX: {len(TICKERS)} saham")
 # 🔧 SIDEBAR — KONTROL SAJA
 # ======================================================
 st.sidebar.subheader("🔄 Mode Trading")
-mode = st.sidebar.selectbox(
+
+mode_option = st.sidebar.radio(
     "Pilih Mode",
-    ["Momentum", "Pullback", "Strict"],
-    index=1
+    ["Auto", "Momentum", "Pullback", "Strict"],
+    index=0
 )
+
 
 st.sidebar.divider()
 
@@ -329,6 +332,12 @@ with tab_auto:
     )
 
     st.dataframe(df_rank, use_container_width=True)
+    active_mode = mode_option
+    
+    if mode_option == "Auto" and df_rank is not None and not df_rank.empty:
+        active_mode = auto_switch_mode(df_rank)
+    
+    st.sidebar.info(f"🧠 Active Mode: **{active_mode}**")
 
     # ======================
     # Decision Matrix
@@ -420,4 +429,5 @@ with tab_auto:
     
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
+
 
