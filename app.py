@@ -233,6 +233,21 @@ with tab_single:
             (price + ema20 + ema50).interactive(),
             use_container_width=True
         )
+
+    result = st.session_state.single_result
+    if result:
+        last = result["last"]
+        plan = result["plan"]
+        conf = result["conf"]
+        risk = result["risk"]
+    
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Close", round(safe_float(last.get("Close")), 2))
+        c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
+        c3.metric("Trend", plan.get("trend", "-"))
+        c4.metric("Confidence", round(conf.get("score", 0), 2))
+
+        
         # ===============================
         # 🔍 RINGKASAN CEPAT
         # ===============================
@@ -402,4 +417,5 @@ with tab_auto:
             eq["step"] = range(len(eq))
             st.subheader("📈 Equity Curve")
             st.line_chart(eq.set_index("step")["Equity"])
+
 
