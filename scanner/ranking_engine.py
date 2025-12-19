@@ -40,7 +40,7 @@ def rank_sync_stocks(
     window_ref: int = 60,
     period: str = "1y",
     interval: str = "1d",
-    top_n: int = 20,
+    top_n: int = 10,
 ):
     """
     Ranking Top Saham Sinkron (>=2 dari 3 window: 30 / 60 / 120)
