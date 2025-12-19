@@ -30,7 +30,7 @@ from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 
 # ================= RANGKING =================
 from scanner.ranking_engine import rank_sync_stocks
-from screener.decision_engine import decide_action
+from scanner.decision_engine import decide_action
 
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
@@ -235,6 +235,7 @@ with tab_auto:
             ],
             use_container_width=True
         )
+
 
 
 
