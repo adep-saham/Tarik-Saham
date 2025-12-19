@@ -156,6 +156,18 @@ with tab_single:
             use_container_width=True
         )
 
+# =====================
+# MODE SELECTOR
+# =====================
+st.subheader("🔄 Mode Trading")
+
+mode = st.selectbox(
+    "Pilih Mode",
+    ["Momentum", "Pullback", "Strict"],
+    index=0
+)
+st.divider()
+
 # ======================================================
 # 🤖 TAB 2 — AUTO SYNC
 # ======================================================
@@ -239,7 +251,11 @@ with tab_auto:
     # Decision Matrix
     # ======================
     if df_rank is not None and not df_rank.empty:
-        df_rank["Decision"] = df_rank.apply(decide_action, axis=1)
+        df_rank["Decision"] = df_rank.apply(
+            lambda r: decide_action(r, mode),
+            axis=1
+        )
+
     
         st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
         st.dataframe(
@@ -248,6 +264,7 @@ with tab_auto:
             ],
             use_container_width=True
         )
+
 
 
 
