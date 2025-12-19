@@ -232,7 +232,7 @@ with tab_auto:
     df_rank = None   # ✅ INISIALISASI WAJIB
     
     if sync_2of3:
-        st.subheader("🏆 Ranking Top 20 Saham Sinkron")
+        st.subheader("🏆 Ranking Top 10 Saham Sinkron")
     
         df_rank = rank_sync_stocks(
             tickers=sync_2of3,
@@ -263,6 +263,7 @@ with tab_auto:
             ],
             use_container_width=True
         )
+
 
 
 
