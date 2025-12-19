@@ -239,15 +239,6 @@ with tab_single:
 # ======================================================
 # 🤖 TAB 2 — AUTO SYNC SCANNER
 # ======================================================
-tab_single, tab_auto = st.tabs([
-    "🔎 Single Stock Analysis",
-    "🤖 Auto Sync Stocks (30 / 60 / 120)"
-])
-
-with tab_single:
-    st.write("Single Stock Analysis di sini")
-    # ... kode single stock
-
 with tab_auto:
     st.subheader("🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
     st.caption(f"Universe IDX: {len(TICKERS)} saham")
@@ -297,6 +288,7 @@ with tab_auto:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
