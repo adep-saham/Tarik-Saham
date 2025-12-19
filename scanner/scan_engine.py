@@ -14,7 +14,6 @@ def _ensure_rsi14(df: pd.DataFrame) -> pd.DataFrame:
         rs = gain.rolling(14).mean() / loss.rolling(14).mean()
         df["RSI14"] = 100 - (100 / (1 + rs))
     return df
-tickers = tickers[:1]
 
 def scan_window(
     window: int,
