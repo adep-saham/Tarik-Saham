@@ -26,29 +26,45 @@ from ui.theme import load_theme
 from ui.sidebar import sidebar_inputs
 
 # ================= SCANNER =================
-from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
+from scanner.scan_engine import scan_window
 from scanner.backtest_engine import backtest_mode
 from scanner.walkforward_engine import walk_forward_validate
 
-# ================= RANGKING =================
+# ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
 from scanner.decision_engine import decide_action
 
+
+# ================= STYLE =================
 def color_decision(val):
-            if val == "BUY":
-                return "background-color: #2ecc71; color: white;"
-            elif val == "HOT":
-                return "background-color: #e67e22; color: white;"
-            elif val == "WAIT":
-                return "background-color: #f1c40f; color: black;"
-            elif val == "SKIP":
-                return "background-color: #e74c3c; color: white;"
-            return ""
+    if val == "BUY":
+        return "background-color: #2ecc71; color: white;"
+    elif val == "HOT":
+        return "background-color: #e67e22; color: white;"
+    elif val == "WAIT":
+        return "background-color: #f1c40f; color: black;"
+    elif val == "SKIP":
+        return "background-color: #e74c3c; color: white;"
+    return ""
+
 
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
 load_theme()
 st.markdown("## 📊 Tarik Saham – ADP")
+
+
+# ================= SESSION INIT =================
+for k in ["w30", "w60", "w120"]:
+    if k not in st.session_state:
+        st.session_state[k] = set()
+
+if "bt_result" not in st.session_state:
+    st.session_state.bt_result = None
+
+if "wf_result" not in st.session_state:
+    st.session_state.wf_result = None
+
 
 # ======================================================
 # 📥 LOAD IDX UNIVERSE
@@ -90,8 +106,30 @@ if not selected_boards:
 
 IDX_UNIVERSE = IDX_UNIVERSE[IDX_UNIVERSE["board"].isin(selected_boards)]
 TICKERS = IDX_UNIVERSE["ticker"].tolist()
-
 st.caption(f"Universe IDX: {len(TICKERS)} saham")
+
+
+# ======================================================
+# 🔧 SIDEBAR — KONTROL SAJA
+# ======================================================
+st.sidebar.subheader("🔄 Mode Trading")
+mode = st.sidebar.selectbox(
+    "Pilih Mode",
+    ["Momentum", "Pullback", "Strict"],
+    index=1
+)
+
+st.sidebar.divider()
+
+st.sidebar.subheader("🧪 Backtest Mode")
+run_bt = st.sidebar.button("Run Backtest (5-day hold)")
+
+st.sidebar.divider()
+
+st.sidebar.subheader("🔄 Walk-Forward Validation")
+wf_lookback = st.sidebar.selectbox("Lookback (hari)", [3, 5, 7, 10], index=2)
+run_wf = st.sidebar.button("Run Walk-Forward")
+
 
 # ======================================================
 # 🧭 TABS
@@ -101,11 +139,11 @@ tab_single, tab_auto = st.tabs([
     "🤖 Auto Sync Stocks (30 / 60 / 120)"
 ])
 
+
 # ======================================================
 # 🔎 TAB 1 — SINGLE STOCK
 # ======================================================
 with tab_single:
-
     (
         raw_ticker,
         period,
@@ -120,7 +158,7 @@ with tab_single:
         ticker = normalize_ticker(raw_ticker)
         df = fetch_data(ticker, period, interval)
 
-        if df.empty:
+        if df is None or df.empty:
             st.error("Data kosong / ticker tidak valid.")
             st.stop()
 
@@ -149,7 +187,6 @@ with tab_single:
         )
 
         df_w = df.tail(zoom)
-
         chart_df = df_w.reset_index().rename(columns={"index": "Date"})
 
         price = alt.Chart(chart_df).mark_line().encode(
@@ -164,21 +201,8 @@ with tab_single:
             color="red", strokeDash=[6, 3]
         ).encode(x="Date:T", y="EMA50:Q")
 
-        st.altair_chart(
-            (price + ema20 + ema50).interactive(),
-            use_container_width=True
-        )
-# =====================
-# MODE SELECTOR
-# =====================
-st.sidebar.subheader("🔄 Mode Trading")
-        
-mode = st.sidebar.selectbox(
-    "Pilih Mode",
-    ["Momentum", "Pullback", "Strict"],
-    index=0
-)
-st.divider()    
+        st.altair_chart((price + ema20 + ema50).interactive(), use_container_width=True)
+
 
 # ======================================================
 # 🤖 TAB 2 — AUTO SYNC
@@ -188,17 +212,12 @@ with tab_auto:
 
     col1, col2, col3 = st.columns(3)
 
-    for k in ["w30", "w60", "w120"]:
-        if k not in st.session_state:
-            st.session_state[k] = set()
-
     with col1:
         if st.button("Scan Window 30"):
             with st.spinner("Scanning 30..."):
                 w30, stats30 = scan_window(30, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w30 = set(w30)
                 st.caption(f"30 stats: {stats30}")
-
 
     with col2:
         if st.button("Scan Window 60"):
@@ -207,15 +226,12 @@ with tab_auto:
                 st.session_state.w60 = set(w60)
                 st.caption(f"60 stats: {stats60}")
 
-
     with col3:
         if st.button("Scan Window 120"):
             with st.spinner("Scanning 120..."):
                 w120, stats120 = scan_window(120, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w120 = set(w120)
                 st.caption(f"120 stats: {stats120}")
-
-
 
     w30 = st.session_state.w30
     w60 = st.session_state.w60
@@ -227,124 +243,86 @@ with tab_auto:
 
     sync_2of3 = (w30 & w60) | (w30 & w120) | (w60 & w120)
 
-    # ======================
-    # Tampilkan saham sinkron
-    # ======================
-    if sync_2of3:
-        st.success(f"Saham sinkron (≥2 window): {len(sync_2of3)}")
-        st.dataframe(
-            pd.DataFrame(sorted(sync_2of3), columns=["Ticker"]),
-            use_container_width=True
-        )
-    else:
+    if not sync_2of3:
         st.warning("Tidak ada saham sinkron saat ini.")
-    
-    # ======================
-    # Ranking & Decision
-    # ======================
-    df_rank = None   # ✅ INISIALISASI WAJIB
-    
-    if sync_2of3:
-        st.subheader("🏆 Ranking Top 10 Saham Sinkron")
-    
-        df_rank = rank_sync_stocks(
-            tickers=sync_2of3,
-            w30=w30,
-            w60=w60,
-            w120=w120,
-            load_price_data=fetch_data,
-            calc_indicators=calc_indicators,
-            top_n=10   # kalau mau langsung Top 10
-        )
-    
-        st.dataframe(df_rank, use_container_width=True)
+        st.stop()
 
-        
-    
+    st.success(f"Saham sinkron (≥2 window): {len(sync_2of3)}")
+    st.dataframe(pd.DataFrame(sorted(sync_2of3), columns=["Ticker"]), use_container_width=True)
+
+    # ======================
+    # Ranking
+    # ======================
+    st.subheader("🏆 Ranking Top 10 Saham Sinkron")
+
+    df_rank = rank_sync_stocks(
+        tickers=sync_2of3,
+        w30=w30,
+        w60=w60,
+        w120=w120,
+        load_price_data=fetch_data,
+        calc_indicators=calc_indicators,
+        top_n=10
+    )
+
+    st.dataframe(df_rank, use_container_width=True)
+
     # ======================
     # Decision Matrix
     # ======================
-    if df_rank is not None and not df_rank.empty:
-        df_rank["Decision"] = df_rank.apply(
-            lambda r: decide_action(r, mode),
-            axis=1
-        )
+    st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
+    df_rank["Decision"] = df_rank.apply(lambda r: decide_action(r, mode), axis=1)
 
-       
-        st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
-        styled_df = (
-            df_rank[
-                ["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]
-            ]
-            .style
-            .applymap(color_decision, subset=["Decision"])
-        )
-        
-        st.dataframe(styled_df, use_container_width=True)
-
-st.sidebar.subheader("🧪 Backtest Mode")
-
-if st.sidebar.button("Run Backtest (5-day hold)"):
-    modes = ["Momentum", "Pullback", "Strict"]
-    rows = []
-
-    for m in modes:
-        res = backtest_mode(
-            tickers=list(sync_2of3),
-            load_price_data=fetch_data,
-            decide_action_func=decide_action,
-            mode=m,
-            holding_days=5
-        )
-        if res:
-            rows.append(res)
-            
-    if rows:
-        st.subheader("BACK TEST")
-        df_bt = pd.DataFrame(rows)
-        st.dataframe(df_bt, use_container_width=True)
-    else:
-        st.warning("Backtest tidak menghasilkan trade.")
-
-st.sidebar.subheader("🔄 Walk-Forward Validation")
-
-lookback = st.sidebar.selectbox(
-    "Lookback (hari)",
-    [3, 5, 7, 10],
-    index=2
-)
-
-if st.sidebar.button("Run Walk-Forward"):
-    res = walk_forward_validate(
-        tickers=df_rank["Ticker"].tolist(),
-        load_price_data=fetch_data,
-        decide_action_func=decide_action,
-        mode=mode,
-        lookback_days=lookback
+    styled_df = (
+        df_rank[["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]]
+        .style
+        .applymap(color_decision, subset=["Decision"])
     )
+    st.dataframe(styled_df, use_container_width=True)
 
-    if res:
-        df_wf, summary = res
+    # ======================================================
+    # BACKTEST — Trigger sidebar, output di tab_auto (rapi)
+    # ======================================================
+    if run_bt:
+        with st.spinner("Running backtest..."):
+            rows = []
+            for m in ["Momentum", "Pullback", "Strict"]:
+                res = backtest_mode(
+                    tickers=list(sync_2of3),
+                    load_price_data=fetch_data,
+                    decide_action_func=decide_action,
+                    mode=m,
+                    holding_days=5
+                )
+                if res:
+                    rows.append(res)
+            st.session_state.bt_result = pd.DataFrame(rows) if rows else None
 
-        st.markdown("### 📊 Summary")
-        st.json(summary)
+    if st.session_state.bt_result is not None:
+        st.subheader("📈 Backtest Result")
+        st.dataframe(st.session_state.bt_result, use_container_width=True)
 
-        st.markdown("### 📋 Detail Signal")
-        st.dataframe(df_wf, use_container_width=True)
-    else:
-        st.warning("Tidak ada sinyal BUY pada periode walk-forward.")
+    # ======================================================
+    # WALK-FORWARD — Trigger sidebar, output di tab_auto (rapi)
+    # ======================================================
+    if run_wf:
+        with st.spinner("Running walk-forward..."):
+            # pakai top rank saja agar cepat
+            res = walk_forward_validate(
+                tickers=df_rank["Ticker"].tolist(),
+                load_price_data=fetch_data,
+                decide_action_func=decide_action,
+                mode=mode,
+                lookback_days=wf_lookback
+            )
+            st.session_state.wf_result = res
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if st.session_state.wf_result is not None:
+        res = st.session_state.wf_result
+        if res:
+            df_wf, summary = res
+            st.subheader("🔄 Walk-Forward Validation")
+            st.json(summary)
+            st.dataframe(df_wf, use_container_width=True)
+        else:
+            st.warning("Tidak ada sinyal BUY pada periode walk-forward.")
