@@ -69,10 +69,10 @@ def scan_window(
             df = _ensure_ema(df, window * 2, f"EMA{window*2}")
             df = _ensure_rsi14(df)
 
-            last = df.iloc[-1]
-            fast = last.get(f"EMA{window}")
-            slow = last.get(f"EMA{window*2}")
-            rsi = last.get("RSI14")
+            fast = df[f"EMA{window}"].iloc[-1]
+            slow = df[f"EMA{window*2}"].iloc[-1]
+            rsi  = df["RSI14"].iloc[-1]
+
 
             if pd.isna(fast) or pd.isna(slow) or pd.isna(rsi):
                 stats["nan_ind"] += 1
