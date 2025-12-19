@@ -144,6 +144,7 @@ tab_single, tab_auto = st.tabs([
 # 🔎 TAB 1 — SINGLE STOCK
 # ======================================================
 with tab_single:
+
     (
         raw_ticker,
         period,
@@ -154,54 +155,112 @@ with tab_single:
         analyze_btn
     ) = sidebar_inputs()
 
+    # Saat tombol diklik: hitung sekali, simpan hasil
     if analyze_btn and raw_ticker:
-        ticker = normalize_ticker(raw_ticker)
-        df = fetch_data(ticker, period, interval)
+        try:
+            ticker = normalize_ticker(raw_ticker)
+            df = fetch_data(ticker, period, interval)
 
-        if df is None or df.empty:
-            st.error("Data kosong / ticker tidak valid.")
-            st.stop()
+            if df is None or df.empty:
+                st.error("Data kosong / ticker tidak valid.")
+                st.stop()
 
-        df = calc_indicators(df)
-        last = df.iloc[-1]
+            df = calc_indicators(df)
+            last = df.iloc[-1]
 
-        close_price = safe_float(last.get("Close"))
-        desc = interpret_last(last)
-        patterns = detect_patterns(df)
-        plan = generate_entry_plan(df)
-        conf = compute_confidence(df, last, desc, patterns, plan)
-        risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
+            close_price = safe_float(last.get("Close"))
+            desc = interpret_last(last)
+            patterns = detect_patterns(df)
+            plan = generate_entry_plan(df)
+            conf = compute_confidence(df, last, desc, patterns, plan)
+            risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
 
-        badge_text, _ = get_trade_badge(
-            conf["score"],
-            plan.get("status"),
-            plan.get("trend")
-        )
+            badge_text, _ = get_trade_badge(
+                conf["score"],
+                plan.get("status"),
+                plan.get("trend")
+            )
 
-        st.subheader(f"{ticker} — {badge_text}")
+            # SIMPAN agar tidak hilang saat rerun
+            st.session_state.single_result = {
+                "ticker": ticker,
+                "df": df,
+                "last": last,
+                "close_price": close_price,
+                "desc": desc,
+                "patterns": patterns,
+                "plan": plan,
+                "conf": conf,
+                "risk": risk,
+                "badge": badge_text,
+            }
 
-        zoom = st.select_slider(
-            "🔍 Window Analisa",
-            options=[30, 60, 120],
-            value=30
-        )
+        except Exception as e:
+            st.error(f"Single analysis error: {e}")
 
-        df_w = df.tail(zoom)
-        chart_df = df_w.reset_index().rename(columns={"index": "Date"})
+    # Render hasil dari session_state (jadi tetap tampil walau rerun)
+    result = st.session_state.single_result
+    if result is None:
+        st.info("Klik tombol **Analisa** di sidebar untuk menjalankan Single Stock Analysis.")
+        st.stop()
 
-        price = alt.Chart(chart_df).mark_line().encode(
-            x="Date:T", y="Close:Q"
-        )
+    ticker = result["ticker"]
+    df = result["df"]
+    last = result["last"]
+    plan = result["plan"]
+    conf = result["conf"]
+    risk = result["risk"]
+    badge_text = result["badge"]
 
-        ema20 = alt.Chart(chart_df).mark_line(
-            color="green", strokeDash=[4, 2]
-        ).encode(x="Date:T", y="EMA20:Q")
+    st.subheader(f"{ticker} — {badge_text}")
 
-        ema50 = alt.Chart(chart_df).mark_line(
-            color="red", strokeDash=[6, 3]
-        ).encode(x="Date:T", y="EMA50:Q")
+    # ===== Ringkas (biar terasa 'jalan semua')
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Close", safe_float(last.get("Close")))
+    c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
+    c3.metric("Trend", str(plan.get("trend", "-")))
+    c4.metric("Confidence", round(conf.get("score", 0), 2))
 
-        st.altair_chart((price + ema20 + ema50).interactive(), use_container_width=True)
+    # ===== Chart
+    zoom = st.select_slider(
+        "🔍 Window Analisa",
+        options=[30, 60, 120],
+        value=30,
+        key="single_zoom"
+    )
+
+    df_w = df.tail(zoom)
+    chart_df = df_w.reset_index().rename(columns={"index": "Date"})
+
+    price = alt.Chart(chart_df).mark_line().encode(
+        x="Date:T", y="Close:Q"
+    )
+
+    ema20 = alt.Chart(chart_df).mark_line(
+        color="green", strokeDash=[4, 2]
+    ).encode(x="Date:T", y="EMA20:Q")
+
+    ema50 = alt.Chart(chart_df).mark_line(
+        color="red", strokeDash=[6, 3]
+    ).encode(x="Date:T", y="EMA50:Q")
+
+    st.altair_chart((price + ema20 + ema50).interactive(), use_container_width=True)
+
+    # ===== Detail (pakai expander biar rapi)
+    with st.expander("📌 Entry Plan", expanded=True):
+        st.json(plan)
+
+    with st.expander("🧠 Interpretation & Patterns", expanded=False):
+        st.write(result["desc"])
+        st.json(result["patterns"])
+
+    with st.expander("🛡️ Risk Management", expanded=False):
+        # risk bisa dict atau dataframe tergantung implementasimu
+        if isinstance(risk, dict):
+            st.json(risk)
+        else:
+            st.dataframe(risk, use_container_width=True)
+
 
 
 # ======================================================
@@ -326,3 +385,4 @@ with tab_auto:
             st.dataframe(df_wf, use_container_width=True)
         else:
             st.warning("Tidak ada sinyal BUY pada periode walk-forward.")
+
