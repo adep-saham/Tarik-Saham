@@ -122,7 +122,7 @@ def get_universe():
 IDX_UNIVERSE = get_universe()
 
 # ================= TABS =================
-tab_single, tab_scanner = st.tabs([
+tab_single, tab_auto = st.tabs([
     "🔎 Single Stock Analysis",
     "🤖 Auto Sync Stocks (30 / 60 / 120)"
 ])
@@ -288,6 +288,7 @@ with tab_auto:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
