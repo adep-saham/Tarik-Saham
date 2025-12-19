@@ -32,6 +32,7 @@ from scanner.walkforward_engine import walk_forward_validate
 from scanner.equity_engine import build_equity_curve
 from scanner.auto_mode_engine import auto_switch_mode
 from scanner.entry_confirmation import entry_confirmation
+from scanner.entry_zone_engine import compute_entry_zone
 
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -374,6 +375,32 @@ with tab_auto:
     
     st.dataframe(styled_df, use_container_width=True)
 
+    # =========================
+    # 🎯 Entry Zone & Stoploss
+    # =========================
+    df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
+        lambda r: pd.Series(
+            compute_entry_zone(r, active_mode)
+            if r["FinalAction"] == "BUY"
+            else {"EntryLow": None, "EntryHigh": None, "StopLoss": None}
+        ),
+        axis=1
+    )
+    st.subheader("🎯 Entry Plan – Final")
+
+    st.dataframe(
+        df_rank[
+            [
+                "Ticker",
+                "FinalAction",
+                "EntryLow",
+                "EntryHigh",
+                "StopLoss"
+            ]
+        ],
+        use_container_width=True
+    )
+
 
     # ======================================================
     # BACKTEST — Trigger sidebar, output di tab_auto (rapi)
@@ -452,6 +479,7 @@ with tab_auto:
     
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
+
 
 
 
