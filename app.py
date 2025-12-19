@@ -203,6 +203,9 @@ with tab_auto:
 
     sync_2of3 = (w30 & w60) | (w30 & w120) | (w60 & w120)
 
+    # ======================
+    # Tampilkan saham sinkron
+    # ======================
     if sync_2of3:
         st.success(f"Saham sinkron (≥2 window): {len(sync_2of3)}")
         st.dataframe(
@@ -211,7 +214,12 @@ with tab_auto:
         )
     else:
         st.warning("Tidak ada saham sinkron saat ini.")
-
+    
+    # ======================
+    # Ranking & Decision
+    # ======================
+    df_rank = None   # ✅ INISIALISASI WAJIB
+    
     if sync_2of3:
         st.subheader("🏆 Ranking Top 20 Saham Sinkron")
     
@@ -221,11 +229,16 @@ with tab_auto:
             w60=w60,
             w120=w120,
             load_price_data=fetch_data,
-            calc_indicators=calc_indicators
+            calc_indicators=calc_indicators,
+            top_n=10   # kalau mau langsung Top 10
         )
     
         st.dataframe(df_rank, use_container_width=True)
-    if not df_rank.empty:
+    
+    # ======================
+    # Decision Matrix
+    # ======================
+    if df_rank is not None and not df_rank.empty:
         df_rank["Decision"] = df_rank.apply(decide_action, axis=1)
     
         st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
@@ -235,6 +248,7 @@ with tab_auto:
             ],
             use_container_width=True
         )
+
 
 
 
