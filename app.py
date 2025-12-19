@@ -297,12 +297,14 @@ if st.sidebar.button("Run Backtest (5-day hold)"):
         )
         if res:
             rows.append(res)
-
+            
     if rows:
+        st.subheader("BACK TEST")
         df_bt = pd.DataFrame(rows)
         st.dataframe(df_bt, use_container_width=True)
     else:
         st.warning("Backtest tidak menghasilkan trade.")
+
 
 
 
