@@ -140,6 +140,9 @@ run_wf = st.sidebar.button("Run Walk-Forward")
 st.sidebar.subheader("📈 Equity Curve")
 run_eq = st.sidebar.button("Generate Equity Curve")
 
+st.sidebar.subheader("🔔 Telegram Alert")
+enable_tg = st.sidebar.checkbox("Enable Telegram WAIT → BUY", value=True)
+
 
 # ======================================================
 # 🧭 TABS
@@ -481,36 +484,35 @@ with tab_auto:
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
 
-st.sidebar.subheader("🔔 Telegram Alert")
-enable_tg = st.sidebar.checkbox("Enable Telegram WAIT → BUY", value=True)
 
-if enable_alerts and df_rank is not None and not df_rank.empty:
-    current_map = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
+    if enable_alerts and df_rank is not None and not df_rank.empty:
+        current_map = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
+    
+        flipped = []
+        for t, cur in current_map.items():
+            prev = st.session_state.prev_final_actions.get(t, None)
+            if prev == "WAIT" and cur == "BUY":
+                flipped.append(t)
+    
+        st.session_state.prev_final_actions = current_map
+    
+        if flipped:
+            st.toast(f"🚨 WAIT → BUY: {', '.join(flipped)}", icon="🚨")
+    
+            if enable_tg:
+                for t in flipped:
+                    row = df_rank[df_rank["Ticker"] == t].iloc[0]
+    
+                    msg = (
+                        "🚨 *WAIT → BUY ALERT*\n"
+                        f"*Ticker*: {t}\n"
+                        f"*Mode*: {active_mode}\n"
+                        f"*Entry*: {row['EntryLow']} – {row['EntryHigh']}\n"
+                        f"*Stoploss*: {row['StopLoss']}"
+                    )
+    
+                    send_telegram_alert(msg)
 
-    flipped = []
-    for t, cur in current_map.items():
-        prev = st.session_state.prev_final_actions.get(t, None)
-        if prev == "WAIT" and cur == "BUY":
-            flipped.append(t)
-
-    st.session_state.prev_final_actions = current_map
-
-    if flipped:
-        st.toast(f"🚨 WAIT → BUY: {', '.join(flipped)}", icon="🚨")
-
-        if enable_tg:
-            for t in flipped:
-                row = df_rank[df_rank["Ticker"] == t].iloc[0]
-
-                msg = (
-                    "🚨 *WAIT → BUY ALERT*\n"
-                    f"*Ticker*: {t}\n"
-                    f"*Mode*: {active_mode}\n"
-                    f"*Entry*: {row['EntryLow']} – {row['EntryHigh']}\n"
-                    f"*Stoploss*: {row['StopLoss']}"
-                )
-
-                send_telegram_alert(msg)
 
 
 
