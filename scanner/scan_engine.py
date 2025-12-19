@@ -41,7 +41,8 @@ def scan_window(
         stats["total"] += 1
         try:
             # ⬇️ PAKSA LOAD DATA PANJANG
-            df = load_price_data(ticker, limit=min_len + 50)
+            df = load_price_data(ticker)
+
 
             if df is None or len(df) == 0:
                 stats["none"] += 1
@@ -51,9 +52,10 @@ def scan_window(
                 stats["no_close"] += 1
                 continue
 
-            if len(df) < min_len:
+            if len(df) < window * 2:
                 stats["short"] += 1
                 continue
+
 
             if calc_indicators is not None:
                 df = calc_indicators(df)
