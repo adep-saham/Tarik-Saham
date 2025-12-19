@@ -170,9 +170,9 @@ with tab_single:
 # =====================
 # MODE SELECTOR
 # =====================
-st.subheader("🔄 Mode Trading")
+st.sidebar.subheader("🔄 Mode Trading")
         
-mode = st.selectbox(
+mode = st.sidebar.selectbox(
     "Pilih Mode",
     ["Momentum", "Pullback", "Strict"],
     index=0
@@ -281,9 +281,9 @@ with tab_auto:
         
         st.dataframe(styled_df, use_container_width=True)
 
-st.subheader("🧪 Backtest Mode")
+st.sidebar.subheader("🧪 Backtest Mode")
 
-if st.button("Run Backtest (5-day hold)"):
+if st.sidebar.button("Run Backtest (5-day hold)"):
     modes = ["Momentum", "Pullback", "Strict"]
     rows = []
 
@@ -303,6 +303,7 @@ if st.button("Run Backtest (5-day hold)"):
         st.dataframe(df_bt, use_container_width=True)
     else:
         st.warning("Backtest tidak menghasilkan trade.")
+
 
 
 
