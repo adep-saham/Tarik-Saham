@@ -83,6 +83,20 @@ def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _ensure_ema(df, span: int, colname: str):
+    if colname not in df.columns:
+        df[colname] = df["Close"].ewm(span=span, adjust=False).mean()
+    return df
+
+def _ensure_rsi14(df):
+    if "RSI14" not in df.columns:
+        delta = df["Close"].diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        rs = gain.rolling(14).mean() / loss.rolling(14).mean()
+        df["RSI14"] = 100 - (100 / (1 + rs))
+    return df
+
 def scan_window(window, tickers):
     results = []
 
@@ -91,9 +105,19 @@ def scan_window(window, tickers):
         if df is None or len(df) < window * 2:
             continue
 
+        # pakai core calc_indicators dulu (kalau ada)
         df = calc_indicators(df)
-        last = df.iloc[-1]
 
+        # pastikan Close ada
+        if "Close" not in df.columns:
+            continue
+
+        # pastikan EMA window tersedia
+        df = _ensure_ema(df, window, f"EMA{window}")
+        df = _ensure_ema(df, window * 2, f"EMA{window*2}")
+        df = _ensure_rsi14(df)
+
+        last = df.iloc[-1]
         fast = last.get(f"EMA{window}")
         slow = last.get(f"EMA{window*2}")
         rsi = last.get("RSI14")
@@ -101,11 +125,12 @@ def scan_window(window, tickers):
         if pd.isna(fast) or pd.isna(slow) or pd.isna(rsi):
             continue
 
+        # relaxed filter (biar tidak 0)
         if fast >= slow * 0.99 and rsi >= 40:
-           results.append(ticker)
-
+            results.append(ticker)
 
     return results
+
 
 
 # =============================================================
@@ -120,6 +145,21 @@ def get_universe():
     return load_idx_universe()
 
 IDX_UNIVERSE = get_universe()
+
+# ===== build tickers list (.JK) =====
+if "ticker" not in IDX_UNIVERSE.columns:
+    st.error("Kolom 'ticker' tidak ditemukan di idx_universe.csv")
+    st.stop()
+
+IDX_UNIVERSE["ticker"] = (
+    IDX_UNIVERSE["ticker"].astype(str).str.upper().str.strip()
+)
+IDX_UNIVERSE["ticker"] = IDX_UNIVERSE["ticker"].apply(
+    lambda x: x if x.endswith(".JK") else f"{x}.JK"
+)
+
+TICKERS = IDX_UNIVERSE["ticker"].tolist()
+
 
 # ================= TABS =================
 tab_single, tab_auto = st.tabs([
@@ -288,6 +328,7 @@ with tab_auto:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
