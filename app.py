@@ -164,16 +164,27 @@ def get_universe_df():
 
 IDX_UNIVERSE = get_universe_df()
 
-# 🔥 Filter board agar scan cepat & relevan
+st.subheader("🔎 Filter IDX Universe")
+
+BOARD_OPTIONS = ["UTAMA", "AKSELERASI", "PENGEMBANGAN"]
+
+selected_boards = st.multiselect(
+    "Pilih papan saham IDX",
+    options=BOARD_OPTIONS,
+    default=["UTAMA", "AKSELERASI"]  # 🚀 default cepat & likuid
+)
+
+if not selected_boards:
+    st.warning("Pilih minimal satu papan saham.")
+    st.stop()
+
+
 IDX_UNIVERSE = IDX_UNIVERSE[
-    IDX_UNIVERSE["board"].isin([
-        "UTAMA",
-        "AKSELERASI",
-        "PENGEMBANGAN"
-    ])
+    IDX_UNIVERSE["board"].isin(selected_boards)
 ]
 
 TICKERS = IDX_UNIVERSE["ticker"].tolist()
+
 
 # ================= TABS =================
 tab_single, tab_auto = st.tabs([
@@ -337,12 +348,13 @@ with tab_auto:
 
 
 
-    st.caption(f"Universe IDX (filtered): {len(TICKERS)} saham")
+    
     st.caption(
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
     
+
 
 
 
