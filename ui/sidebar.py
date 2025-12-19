@@ -3,7 +3,7 @@ import streamlit as st
 def sidebar_inputs():
     st.sidebar.header("⚙️ Pengaturan")
 
-    ticker = st.sidebar.text_input("Kode Saham", "ANTM.JK")
+    ticker = st.sidebar.text_input("Kode Saham", "ANTM")
     period = st.sidebar.selectbox("Periode", ["3mo", "6mo", "1y", "2y"])
     interval = st.sidebar.selectbox("Interval", ["1d", "1h", "30m"])
 
@@ -23,3 +23,4 @@ def sidebar_inputs():
         lot_size,
         analyze_btn
     )
+
