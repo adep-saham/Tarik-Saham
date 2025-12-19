@@ -343,7 +343,7 @@ with tab_auto:
     # Decision Matrix
     # ======================
     st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
-    df_rank["Decision"] = df_rank.apply(lambda r: decide_action(r, mode), axis=1)
+    df_rank["Decision"] = df_rank.apply(lambda r: decide_action(r, active_mode), axis=1)
 
     styled_df = (
         df_rank[["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]]
@@ -429,5 +429,6 @@ with tab_auto:
     
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
+
 
 
