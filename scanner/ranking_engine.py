@@ -51,9 +51,12 @@ def detect_bandar(df: pd.DataFrame, ema_fast: float) -> str:
     if "Volume" not in df.columns or len(df) < 20:
         return "N/A"
 
-    vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
-    vol_now = df["Volume"].iloc[-1]
-    close = df["Close"].iloc[-1]
+    try:
+        vol_ma = float(df["Volume"].rolling(20).mean().iloc[-1])
+        vol_now = float(df["Volume"].iloc[-1])
+        close = float(df["Close"].iloc[-1])
+    except Exception:
+        return "N/A"
 
     if vol_now > 1.5 * vol_ma and close > ema_fast:
         return "ACCUM"
