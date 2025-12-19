@@ -32,6 +32,17 @@ from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 from scanner.ranking_engine import rank_sync_stocks
 from scanner.decision_engine import decide_action
 
+def color_decision(val):
+            if val == "BUY":
+                return "background-color: #2ecc71; color: white;"
+            elif val == "HOT":
+                return "background-color: #e67e22; color: white;"
+            elif val == "WAIT":
+                return "background-color: #f1c40f; color: black;"
+            elif val == "SKIP":
+                return "background-color: #e74c3c; color: white;"
+            return ""
+
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
 load_theme()
@@ -245,6 +256,8 @@ with tab_auto:
         )
     
         st.dataframe(df_rank, use_container_width=True)
+
+        
     
     # ======================
     # Decision Matrix
@@ -257,12 +270,17 @@ with tab_auto:
 
        
         st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
-        st.dataframe(
+        styled_df = (
             df_rank[
                 ["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]
-            ],
-            use_container_width=True
+            ]
+            .style
+            .applymap(color_decision, subset=["Decision"])
         )
+        
+        st.dataframe(styled_df, use_container_width=True)
+
+
 
 
 
