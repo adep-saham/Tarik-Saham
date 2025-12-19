@@ -159,7 +159,11 @@ tab_single, tab_auto = st.tabs([
 # ======================================================
 # TAB 1 — SINGLE STOCK
 # ======================================================
+# ======================================================
+# 🔎 TAB 1 — SINGLE STOCK ANALYSIS
+# ======================================================
 with tab_single:
+
     (
         raw_ticker,
         period,
@@ -170,6 +174,9 @@ with tab_single:
         analyze_btn
     ) = sidebar_inputs()
 
+    # ==============================
+    # HITUNG SAAT TOMBOL DIKLIK
+    # ==============================
     if analyze_btn and raw_ticker:
         try:
             ticker = normalize_ticker(raw_ticker)
@@ -194,6 +201,7 @@ with tab_single:
                     plan.get("trend")
                 )
 
+                # SIMPAN SEMUA KE SESSION (ANTI RERUN ERROR)
                 st.session_state.single_result = {
                     "ticker": ticker,
                     "df": df,
@@ -201,23 +209,46 @@ with tab_single:
                     "plan": plan,
                     "conf": conf,
                     "risk": risk,
+                    "desc": desc,
+                    "patterns": patterns,
                     "badge": badge_text,
                 }
 
         except Exception as e:
             st.error(f"Single analysis error: {e}")
 
+    # ==============================
+    # RENDER HASIL (DARI SESSION)
+    # ==============================
     result = st.session_state.single_result
-    if result:
-        st.subheader(f"{result['ticker']} — {result['badge']}")
 
+    if not result:
+        st.info("Klik tombol **Analisa** di sidebar untuk menjalankan Single Stock Analysis.")
+    else:
+        # Ambil SEMUA dari session_state
+        ticker = result["ticker"]
+        df = result["df"]
+        last = result["last"]
+        plan = result["plan"]
+        conf = result["conf"]
+        risk = result["risk"]
+        desc = result["desc"]
+        patterns = result["patterns"]
+        badge_text = result["badge"]
+
+        st.subheader(f"{ticker} — {badge_text}")
+
+        # ==============================
+        # CHART
+        # ==============================
         zoom = st.select_slider(
             "🔍 Window Analisa",
             options=[30, 60, 120],
-            value=30
+            value=30,
+            key="single_zoom"
         )
 
-        df_w = result["df"].tail(zoom).reset_index()
+        df_w = df.tail(zoom).reset_index()
 
         price = alt.Chart(df_w).mark_line().encode(
             x="Date:T", y="Close:Q"
@@ -234,45 +265,28 @@ with tab_single:
             use_container_width=True
         )
 
-    result = st.session_state.single_result
-    if result:
-        last = result["last"]
-        plan = result["plan"]
-        conf = result["conf"]
-        risk = result["risk"]
-    
+        # ===============================
+        # 🔍 RINGKASAN CEPAT (SATU KALI SAJA)
+        # ===============================
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Close", round(safe_float(last.get("Close")), 2))
         c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
         c3.metric("Trend", plan.get("trend", "-"))
         c4.metric("Confidence", round(conf.get("score", 0), 2))
 
-        
-        # ===============================
-        # 🔍 RINGKASAN CEPAT
-        # ===============================
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Close", round(safe_float(last.get("Close")), 2))
-        c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
-        c3.metric("Trend", plan.get("trend", "-"))
-        c4.metric("Confidence", round(conf.get("score", 0), 2))
-        
-        
         # ===============================
         # 📌 ENTRY PLAN
         # ===============================
         with st.expander("📌 Entry Plan", expanded=True):
             st.json(plan)
-        
-        
+
         # ===============================
-        # 🧠 INTERPRETATION & PATTERN
+        # 🧠 INTERPRETATION & PATTERNS
         # ===============================
         with st.expander("🧠 Interpretation & Patterns", expanded=False):
             st.write(desc)
             st.json(patterns)
-        
-        
+
         # ===============================
         # 🛡️ RISK MANAGEMENT
         # ===============================
@@ -281,13 +295,13 @@ with tab_single:
                 st.json(risk)
             else:
                 st.dataframe(risk, use_container_width=True)
-        
-        
+
         # ===============================
         # 📊 CONFIDENCE DETAIL
         # ===============================
         with st.expander("📊 Confidence Detail", expanded=False):
             st.json(conf)
+
 
 
 
@@ -417,5 +431,6 @@ with tab_auto:
             eq["step"] = range(len(eq))
             st.subheader("📈 Equity Curve")
             st.line_chart(eq.set_index("step")["Equity"])
+
 
 
