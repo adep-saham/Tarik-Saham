@@ -6,17 +6,18 @@ def build_equity_curve(
     decide_action_func,
     mode: str,
     holding_days: int = 5,
-    initial_capital: float = 100.0,
+    base_equity: float = 100.0,
     period: str = "6mo",
     interval: str = "1d",
 ):
     """
-    Build equity curve based on BUY signals.
-    Capital is normalized (start = 100).
+    NORMALIZED equity curve:
+    - No compounding explosion
+    - Each trade contributes incremental return
     """
 
-    equity = initial_capital
     curve = []
+    cumulative_equity = base_equity
 
     for ticker in tickers:
         try:
@@ -39,22 +40,22 @@ def build_equity_curve(
             }
 
             decision = decide_action_func(fake_row, mode)
-
             if decision != "BUY":
                 continue
 
             entry = float(df.iloc[i]["Close"])
             exit_ = float(df.iloc[i + holding_days]["Close"])
 
-            ret = (exit_ - entry) / entry
+            ret_pct = (exit_ - entry) / entry * 100
 
-            equity *= (1 + ret)
+            # NORMALIZED increment
+            cumulative_equity += ret_pct
 
             curve.append({
                 "Ticker": ticker,
-                "Date": df.index[i + holding_days],
-                "Return": round(ret * 100, 2),
-                "Equity": round(equity, 2)
+                "Trade_Index": len(curve) + 1,
+                "Return_%": round(ret_pct, 2),
+                "Equity": round(cumulative_equity, 2)
             })
 
     if not curve:
