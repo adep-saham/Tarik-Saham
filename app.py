@@ -1,7 +1,9 @@
 # ================= IMPORT =================
 import streamlit as st
 import pandas as pd
+import numpy as np
 import altair as alt
+import yfinance as yf
 
 # ================= CORE =================
 from core.data_loader import fetch_data
@@ -25,30 +27,20 @@ from ui.sidebar import sidebar_inputs
 
 # ================= SCANNER =================
 from scanner.scan_engine import scan_window
-from scanner.ranking_engine import rank_sync_stocks
-from scanner.decision_engine import decide_action
+from scanner.backtest_engine import backtest_mode
+from scanner.walkforward_engine import walk_forward_validate
+from scanner.equity_engine import build_equity_curve
 from scanner.auto_mode_engine import auto_switch_mode
 from scanner.entry_confirmation import entry_confirmation
 from scanner.entry_zone_engine import compute_entry_zone
-from scanner.equity_engine import build_equity_curve
 from scanner.telegram_alert import send_telegram_alert
 
-# ================= PAGE =================
-st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
-load_theme()
-st.markdown("## 📊 Tarik Saham – ADP")
+# ================= RANKING =================
+from scanner.ranking_engine import rank_sync_stocks
+from scanner.decision_engine import decide_action
 
-# ================= SESSION STATE INIT =================
-if "single_result" not in st.session_state:
-    st.session_state.single_result = None
 
-if "prev_final_actions" not in st.session_state:
-    st.session_state.prev_final_actions = {}
-
-if "equity_df" not in st.session_state:
-    st.session_state.equity_df = None
-
-# ================= HELPER =================
+# ================= STYLE =================
 def color_decision(val):
     if val == "BUY":
         return "background-color:#2ecc71;color:white"
@@ -58,6 +50,34 @@ def color_decision(val):
         return "background-color:#e74c3c;color:white"
     return ""
 
+
+# ================= PAGE =================
+st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
+load_theme()
+st.markdown("## 📊 Tarik Saham – ADP")
+
+
+# ================= SESSION INIT =================
+for k in ["w30", "w60", "w120"]:
+    if k not in st.session_state:
+        st.session_state[k] = set()
+
+if "single_result" not in st.session_state:
+    st.session_state.single_result = None
+
+if "bt_result" not in st.session_state:
+    st.session_state.bt_result = None
+
+if "wf_result" not in st.session_state:
+    st.session_state.wf_result = None
+
+if "equity_df" not in st.session_state:
+    st.session_state.equity_df = None
+
+if "prev_final_actions" not in st.session_state:
+    st.session_state.prev_final_actions = {}
+
+
 # ======================================================
 # 📥 LOAD IDX UNIVERSE
 # ======================================================
@@ -65,13 +85,23 @@ def color_decision(val):
 def load_universe():
     df = pd.read_csv("data/idx_universe.csv")
     df.columns = [c.lower().strip() for c in df.columns]
-    df["ticker"] = df["ticker"].astype(str).str.upper()
+
+    if "ticker" not in df.columns:
+        if "kode" in df.columns:
+            df = df.rename(columns={"kode": "ticker"})
+        else:
+            st.error("Kolom ticker/kode tidak ditemukan")
+            st.stop()
+
+    df["ticker"] = df["ticker"].astype(str).str.upper().str.strip()
     df["ticker"] = df["ticker"].apply(
         lambda x: x if x.endswith(".JK") else f"{x}.JK"
     )
     return df
 
+
 IDX_UNIVERSE = load_universe()
+
 
 # ======================================================
 # 🔎 FILTER IDX
@@ -81,7 +111,7 @@ st.subheader("🔎 Filter IDX Universe")
 boards = st.multiselect(
     "Pilih papan saham IDX",
     ["UTAMA", "AKSELERASI", "PENGEMBANGAN"],
-    default=["UTAMA"]
+    default=["UTAMA", "AKSELERASI"]
 )
 
 IDX_UNIVERSE = IDX_UNIVERSE[IDX_UNIVERSE["board"].isin(boards)]
@@ -89,20 +119,33 @@ TICKERS = IDX_UNIVERSE["ticker"].tolist()
 
 st.caption(f"Universe IDX: {len(TICKERS)} saham")
 
+
 # ======================================================
-# SIDEBAR — MODE & ALERT
+# SIDEBAR — KONTROL
 # ======================================================
 st.sidebar.subheader("🔄 Mode Trading")
-
 mode_option = st.sidebar.radio(
     "Pilih Mode",
     ["Auto", "Momentum", "Pullback", "Strict"],
     index=0
 )
 
+st.sidebar.divider()
+
+st.sidebar.subheader("🧪 Backtest")
+run_bt = st.sidebar.button("Run Backtest (5-day hold)")
+
+st.sidebar.subheader("🔄 Walk-Forward")
+wf_lookback = st.sidebar.selectbox("Lookback (hari)", [3, 5, 7, 10], index=2)
+run_wf = st.sidebar.button("Run Walk-Forward")
+
+st.sidebar.subheader("📈 Equity Curve")
+run_eq = st.sidebar.button("Generate Equity Curve")
+
 st.sidebar.subheader("🔔 Alerts")
-enable_alerts = st.sidebar.checkbox("Enable WAIT → BUY alert", value=True)
+enable_alerts = st.sidebar.checkbox("Enable WAIT → BUY Alert", value=True)
 enable_tg = st.sidebar.checkbox("Enable Telegram Alert", value=True)
+
 
 # ======================================================
 # TABS
@@ -111,6 +154,7 @@ tab_single, tab_auto = st.tabs([
     "🔎 Single Stock Analysis",
     "🤖 Auto Sync Stocks (30 / 60 / 120)"
 ])
+
 
 # ======================================================
 # TAB 1 — SINGLE STOCK
@@ -127,52 +171,69 @@ with tab_single:
     ) = sidebar_inputs()
 
     if analyze_btn and raw_ticker:
-        ticker = normalize_ticker(raw_ticker)
-        df = fetch_data(ticker, period, interval)
+        try:
+            ticker = normalize_ticker(raw_ticker)
+            df = fetch_data(ticker, period, interval)
 
-        if df is None or df.empty:
-            st.error("Data tidak ditemukan.")
-        else:
-            df = calc_indicators(df)
-            last = df.iloc[-1]
+            if df is None or df.empty:
+                st.error("Data kosong / ticker tidak valid.")
+            else:
+                df = calc_indicators(df)
+                last = df.iloc[-1]
 
-            close_price = safe_float(last.get("Close"))
-            desc = interpret_last(last)
-            patterns = detect_patterns(df)
-            plan = generate_entry_plan(df)
-            conf = compute_confidence(df, last, desc, patterns, plan)
-            risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
+                close_price = safe_float(last.get("Close"))
+                desc = interpret_last(last)
+                patterns = detect_patterns(df)
+                plan = generate_entry_plan(df)
+                conf = compute_confidence(df, last, desc, patterns, plan)
+                risk = compute_risk(capital, risk_pct, lot_size, plan, close_price)
 
-            badge_text, _ = get_trade_badge(
-                conf["score"],
-                plan.get("status"),
-                plan.get("trend")
-            )
+                badge_text, _ = get_trade_badge(
+                    conf["score"],
+                    plan.get("status"),
+                    plan.get("trend")
+                )
 
-            st.subheader(f"{ticker} — {badge_text}")
+                st.session_state.single_result = {
+                    "ticker": ticker,
+                    "df": df,
+                    "last": last,
+                    "plan": plan,
+                    "conf": conf,
+                    "risk": risk,
+                    "badge": badge_text,
+                }
 
-            zoom = st.select_slider(
-                "🔍 Window Analisa",
-                options=[30, 60, 120],
-                value=30
-            )
+        except Exception as e:
+            st.error(f"Single analysis error: {e}")
 
-            df_w = df.tail(zoom).reset_index()
+    result = st.session_state.single_result
+    if result:
+        st.subheader(f"{result['ticker']} — {result['badge']}")
 
-            price = alt.Chart(df_w).mark_line().encode(
-                x="Date:T", y="Close:Q"
-            )
-            ema20 = alt.Chart(df_w).mark_line(
-                color="green", strokeDash=[4, 2]
-            ).encode(x="Date:T", y="EMA20:Q")
-            ema50 = alt.Chart(df_w).mark_line(
-                color="red", strokeDash=[6, 3]
-            ).encode(x="Date:T", y="EMA50:Q")
+        zoom = st.select_slider(
+            "🔍 Window Analisa",
+            options=[30, 60, 120],
+            value=30
+        )
 
-            st.altair_chart(
-                (price + ema20 + ema50).interactive(),
-                use_container_width=True
-            )
+        df_w = result["df"].tail(zoom).reset_index()
+
+        price = alt.Chart(df_w).mark_line().encode(
+            x="Date:T", y="Close:Q"
+        )
+        ema20 = alt.Chart(df_w).mark_line(
+            color="green", strokeDash=[4, 2]
+        ).encode(x="Date:T", y="EMA20:Q")
+        ema50 = alt.Chart(df_w).mark_line(
+            color="red", strokeDash=[6, 3]
+        ).encode(x="Date:T", y="EMA50:Q")
+
+        st.altair_chart(
+            (price + ema20 + ema50).interactive(),
+            use_container_width=True
+        )
+
 
 # ======================================================
 # TAB 2 — AUTO SYNC
@@ -181,10 +242,6 @@ with tab_auto:
     st.subheader("🤖 Auto Sync Stocks")
 
     col1, col2, col3 = st.columns(3)
-
-    for k in ["w30", "w60", "w120"]:
-        if k not in st.session_state:
-            st.session_state[k] = set()
 
     with col1:
         if st.button("Scan 30"):
@@ -201,109 +258,106 @@ with tab_auto:
             w120, _ = scan_window(120, TICKERS, fetch_data, calc_indicators)
             st.session_state.w120 = set(w120)
 
-    w30 = st.session_state.w30
-    w60 = st.session_state.w60
-    w120 = st.session_state.w120
+    w30, w60, w120 = (
+        st.session_state.w30,
+        st.session_state.w60,
+        st.session_state.w120
+    )
 
     sync = (w30 & w60) | (w30 & w120) | (w60 & w120)
 
     if not sync:
         st.warning("Tidak ada saham sinkron.")
-        st.stop()
-
-    df_rank = rank_sync_stocks(
-        tickers=sync,
-        w30=w30,
-        w60=w60,
-        w120=w120,
-        load_price_data=fetch_data,
-        calc_indicators=calc_indicators,
-        top_n=10
-    )
-
-    active_mode = (
-        auto_switch_mode(df_rank)
-        if mode_option == "Auto"
-        else mode_option
-    )
-
-    st.info(f"🧠 Active Mode: **{active_mode}**")
-
-    # ================= Decision =================
-    df_rank["Decision"] = df_rank.apply(
-        lambda r: decide_action(r, active_mode),
-        axis=1
-    )
-
-    df_rank["Confirmed"] = df_rank.apply(
-        lambda r: entry_confirmation(r)
-        if r["Decision"] == "BUY" else False,
-        axis=1
-    )
-
-    df_rank["FinalAction"] = df_rank.apply(
-        lambda r: "BUY"
-        if r["Decision"] == "BUY" and r["Confirmed"]
-        else "WAIT",
-        axis=1
-    )
-
-    # ================= Entry Zone =================
-    df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
-        lambda r: pd.Series(
-            compute_entry_zone(r, active_mode)
-            if r["FinalAction"] == "BUY"
-            else {"EntryLow": None, "EntryHigh": None, "StopLoss": None}
-        ),
-        axis=1
-    )
-
-    st.subheader("📊 Decision Matrix – Final")
-    st.dataframe(
-        df_rank[
-            ["Ticker", "FinalAction", "EntryLow", "EntryHigh", "StopLoss"]
-        ]
-        .style.applymap(color_decision, subset=["FinalAction"]),
-        use_container_width=True
-    )
-
-    # ================= ALERT =================
-    if enable_alerts:
-        current = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
-        flipped = [
-            t for t, v in current.items()
-            if st.session_state.prev_final_actions.get(t) == "WAIT"
-            and v == "BUY"
-        ]
-        st.session_state.prev_final_actions = current
-
-        if flipped:
-            st.toast(f"🚨 WAIT → BUY: {', '.join(flipped)}", icon="🚨")
-            if enable_tg:
-                for t in flipped:
-                    r = df_rank[df_rank["Ticker"] == t].iloc[0]
-                    msg = (
-                        "🚨 *WAIT → BUY*\n"
-                        f"*Ticker*: {t}\n"
-                        f"*Mode*: {active_mode}\n"
-                        f"*Entry*: {r['EntryLow']} – {r['EntryHigh']}\n"
-                        f"*StopLoss*: {r['StopLoss']}"
-                    )
-                    send_telegram_alert(msg)
-
-    # ================= EQUITY CURVE =================
-    if st.button("📈 Generate Equity Curve"):
-        st.session_state.equity_df = build_equity_curve(
-            tickers=df_rank["Ticker"].tolist(),
+    else:
+        df_rank = rank_sync_stocks(
+            tickers=sync,
+            w30=w30,
+            w60=w60,
+            w120=w120,
             load_price_data=fetch_data,
-            decide_action_func=decide_action,
-            mode=active_mode
+            calc_indicators=calc_indicators,
+            top_n=10
         )
 
-    if st.session_state.equity_df is not None:
-        st.subheader(f"📈 Equity Curve — Mode {active_mode}")
-        eq = st.session_state.equity_df.reset_index(drop=True)
-        eq["step"] = range(len(eq))
-        st.line_chart(eq.set_index("step")["Equity"])
-        with st.expander("📋 Detail Equity Log"):
-            st.dataframe(eq, use_container_width=True)
+        active_mode = (
+            auto_switch_mode(df_rank)
+            if mode_option == "Auto"
+            else mode_option
+        )
+
+        st.info(f"🧠 Active Mode: **{active_mode}**")
+
+        df_rank["Decision"] = df_rank.apply(
+            lambda r: decide_action(r, active_mode),
+            axis=1
+        )
+
+        df_rank["Confirmed"] = df_rank.apply(
+            lambda r: entry_confirmation(r)
+            if r["Decision"] == "BUY" else False,
+            axis=1
+        )
+
+        df_rank["FinalAction"] = df_rank.apply(
+            lambda r: "BUY"
+            if r["Decision"] == "BUY" and r["Confirmed"]
+            else "WAIT",
+            axis=1
+        )
+
+        df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
+            lambda r: pd.Series(
+                compute_entry_zone(r, active_mode)
+                if r["FinalAction"] == "BUY"
+                else {"EntryLow": None, "EntryHigh": None, "StopLoss": None}
+            ),
+            axis=1
+        )
+
+        st.subheader("📊 Decision Matrix")
+        st.dataframe(
+            df_rank[
+                ["Ticker", "FinalAction", "EntryLow", "EntryHigh", "StopLoss"]
+            ].style.applymap(color_decision, subset=["FinalAction"]),
+            use_container_width=True
+        )
+
+        # ===== ALERT =====
+        if enable_alerts:
+            current = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
+            flipped = [
+                t for t, v in current.items()
+                if st.session_state.prev_final_actions.get(t) == "WAIT"
+                and v == "BUY"
+            ]
+            st.session_state.prev_final_actions = current
+
+            if flipped:
+                st.toast(f"🚨 WAIT → BUY: {', '.join(flipped)}")
+                if enable_tg:
+                    for t in flipped:
+                        r = df_rank[df_rank["Ticker"] == t].iloc[0]
+                        msg = (
+                            "🚨 *WAIT → BUY*\n"
+                            f"*Ticker*: {t}\n"
+                            f"*Mode*: {active_mode}\n"
+                            f"*Entry*: {r['EntryLow']} – {r['EntryHigh']}\n"
+                            f"*StopLoss*: {r['StopLoss']}"
+                        )
+                        send_telegram_alert(msg)
+
+        # ===== EQUITY =====
+        if run_eq:
+            st.session_state.equity_df = build_equity_curve(
+                tickers=df_rank["Ticker"].tolist(),
+                load_price_data=fetch_data,
+                decide_action_func=decide_action,
+                mode=active_mode,
+                holding_days=5
+            )
+
+        if st.session_state.equity_df is not None:
+            eq = st.session_state.equity_df.reset_index(drop=True)
+            eq["step"] = range(len(eq))
+            st.subheader("📈 Equity Curve")
+            st.line_chart(eq.set_index("step")["Equity"])
