@@ -29,7 +29,7 @@ from ui.sidebar import sidebar_inputs
 from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 
 # ================= RANGKING =================
-from ranking_engine import rank_sync_stocks
+from scanner.ranking_engine import rank_sync_stocks
 
 
 # ================= PAGE =================
@@ -225,5 +225,6 @@ with tab_auto:
         )
     
         st.dataframe(df_rank, use_container_width=True)
+
 
 
