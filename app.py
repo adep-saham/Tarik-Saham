@@ -414,7 +414,7 @@ with tab_auto:
     eq_df = st.session_state.get("equity_df")
     
     if eq_df is not None:
-        st.subheader(f"📈 Equity Curve — Mode {mode}")
+        st.subheader(f"📈 Equity Curve — Mode {active_mode}")
     
         chart = (
             eq_df
@@ -429,6 +429,7 @@ with tab_auto:
     
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
+
 
 
 
