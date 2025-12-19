@@ -156,17 +156,7 @@ with tab_single:
             use_container_width=True
         )
 
-# =====================
-# MODE SELECTOR
-# =====================
-st.subheader("🔄 Mode Trading")
 
-mode = st.selectbox(
-    "Pilih Mode",
-    ["Momentum", "Pullback", "Strict"],
-    index=0
-)
-st.divider()
 
 # ======================================================
 # 🤖 TAB 2 — AUTO SYNC
@@ -256,7 +246,17 @@ with tab_auto:
             axis=1
         )
 
-    
+# =====================
+# MODE SELECTOR
+# =====================
+st.subheader("🔄 Mode Trading")
+
+mode = st.selectbox(
+    "Pilih Mode",
+    ["Momentum", "Pullback", "Strict"],
+    index=0
+)
+st.divider()    
         st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
         st.dataframe(
             df_rank[
@@ -264,6 +264,7 @@ with tab_auto:
             ],
             use_container_width=True
         )
+
 
 
 
