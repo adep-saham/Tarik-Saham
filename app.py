@@ -101,8 +101,9 @@ def scan_window(window, tickers):
         if pd.isna(fast) or pd.isna(slow) or pd.isna(rsi):
             continue
 
-        if fast > slow and rsi >= 40:
-            results.append(ticker)
+        if fast >= slow * 0.99 and rsi >= 40:
+           results.append(ticker)
+
 
     return results
 
@@ -238,39 +239,55 @@ with tab_single:
 # ======================================================
 # 🤖 TAB 2 — AUTO SYNC SCANNER
 # ======================================================
-with tab_scanner:
+with tab_auto:
+    st.subheader("🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
+    st.caption(f"Universe IDX: {len(TICKERS)} saham")
 
-    st.markdown("### 🤖 Auto Sync Stocks (IDX – 30 / 60 / 120)")
+    col1, col2, col3 = st.columns(3)
 
-    if st.button("🚀 Run Auto Scan"):
+    with col1:
+        if st.button("Scan Window 30"):
+            with st.spinner("Scanning window 30..."):
+                st.session_state["w30"] = set(scan_window(30, TICKERS))
 
-        # === PROSES SCAN ===
-        sync_30 = scan_window(30, IDX_UNIVERSE)
-        sync_60 = scan_window(60, IDX_UNIVERSE)
-        sync_120 = scan_window(120, IDX_UNIVERSE)
+    with col2:
+        if st.button("Scan Window 60"):
+            with st.spinner("Scanning window 60..."):
+                st.session_state["w60"] = set(scan_window(60, TICKERS))
 
-        # === DEBUG JUMLAH (INI YANG KAMU TANYA) ===
-        st.write("Universe:", len(IDX_UNIVERSE))
-        st.write("Lolos window 30:", len(sync_30))
-        st.write("Lolos window 60:", len(sync_60))
-        st.write("Lolos window 120:", len(sync_120))
+    with col3:
+        if st.button("Scan Window 120"):
+            with st.spinner("Scanning window 120..."):
+                st.session_state["w120"] = set(scan_window(120, TICKERS))
 
-        # === HASIL AKHIR ===
-        final_sync = list(
-            (set(sync_30) & set(sync_60)) | (set(sync_30) & set(sync_120))
-        )
+    w30 = st.session_state.get("w30", set())
+    w60 = st.session_state.get("w60", set())
+    w120 = st.session_state.get("w120", set())
 
-        if not final_sync:
-            st.warning("Tidak ada saham sinkron saat ini.")
-        else:
-            st.success(f"Ditemukan {len(final_sync)} saham sinkron")
-            st.dataframe(final_sync)
+    if w30:
+        st.write("Lolos window 30:", len(w30))
+    if w60:
+        st.write("Lolos window 60:", len(w60))
+    if w120:
+        st.write("Lolos window 120:", len(w120))
+
+    if w30 or w60 or w120:
+        sync_2of3 = (w30 & w60) | (w30 & w120) | (w60 & w120)
+        st.success(f"Saham sinkron (≥2 window): {len(sync_2of3)}")
+
+        if sync_2of3:
+            st.dataframe(
+                pd.DataFrame(sorted(sync_2of3), columns=["Ticker"]),
+                use_container_width=True
+            )
+
 
 
     st.caption(
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
