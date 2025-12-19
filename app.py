@@ -141,24 +141,30 @@ st.markdown("## 📊 Tarik Saham – ADP")
 
 # ================= LOAD UNIVERSE (IDX) =================
 @st.cache_data(ttl=24 * 3600)
-def get_universe():
-    return load_idx_universe()
+def get_universe_df():
+    # path yang benar di project streamlit kamu
+    path = "data/idx_universe.csv"
+    df = pd.read_csv(path)
 
-IDX_UNIVERSE = get_universe()
+    # normalisasi nama kolom
+    df.columns = [c.strip().lower() for c in df.columns]
 
-# ===== build tickers list (.JK) =====
-if "ticker" not in IDX_UNIVERSE.columns:
-    st.error("Kolom 'ticker' tidak ditemukan di idx_universe.csv")
-    st.stop()
+    # beberapa file pakai 'kode' bukan 'ticker'
+    if "ticker" not in df.columns:
+        if "kode" in df.columns:
+            df = df.rename(columns={"kode": "ticker"})
+        else:
+            st.error(f"Kolom ticker/kode tidak ditemukan. Kolom yang ada: {df.columns.tolist()}")
+            st.stop()
 
-IDX_UNIVERSE["ticker"] = (
-    IDX_UNIVERSE["ticker"].astype(str).str.upper().str.strip()
-)
-IDX_UNIVERSE["ticker"] = IDX_UNIVERSE["ticker"].apply(
-    lambda x: x if x.endswith(".JK") else f"{x}.JK"
-)
+    df["ticker"] = df["ticker"].astype(str).str.upper().str.strip()
+    df["ticker"] = df["ticker"].apply(lambda x: x if x.endswith(".JK") else f"{x}.JK")
 
+    return df
+
+IDX_UNIVERSE = get_universe_df()
 TICKERS = IDX_UNIVERSE["ticker"].tolist()
+
 
 
 # ================= TABS =================
@@ -328,6 +334,7 @@ with tab_auto:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+
 
 
 
