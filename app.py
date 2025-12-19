@@ -163,9 +163,17 @@ def get_universe_df():
     return df
 
 IDX_UNIVERSE = get_universe_df()
+
+# 🔥 Filter board agar scan cepat & relevan
+IDX_UNIVERSE = IDX_UNIVERSE[
+    IDX_UNIVERSE["board"].isin([
+        "UTAMA",
+        "AKSELERASI",
+        "PENGEMBANGAN"
+    ])
+]
+
 TICKERS = IDX_UNIVERSE["ticker"].tolist()
-
-
 
 # ================= TABS =================
 tab_single, tab_auto = st.tabs([
@@ -334,6 +342,8 @@ with tab_auto:
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
+    st.caption(f"Universe IDX (filtered): {len(TICKERS)} saham")
+
 
 
 
