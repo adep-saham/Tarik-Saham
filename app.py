@@ -29,6 +29,8 @@ from scanner.universe import load_idx_universe
 from scanner.prefilter import prefilter_universe
 from scanner.sync_engine import check_sync
 from scanner.sync_rules import consensus_rule
+from scanner.scan_engine import scan_window
+
 
 # ================== AUTO SYNC SCAN FUNCTION ==================
 
@@ -354,6 +356,7 @@ with tab_auto:
         "yang sudah selaras (30/60/120)."
     )
     
+
 
 
 
