@@ -31,6 +31,7 @@ from scanner.backtest_engine import backtest_mode
 from scanner.walkforward_engine import walk_forward_validate
 from scanner.equity_engine import build_equity_curve
 from scanner.auto_mode_engine import auto_switch_mode
+from scanner.entry_confirmation import entry_confirmation
 
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -339,18 +340,40 @@ with tab_auto:
     
     st.sidebar.info(f"🧠 Active Mode: **{active_mode}**")
 
-    # ======================
-    # Decision Matrix
-    # ======================
+    # =========================
+    # 📊 Decision Matrix + Entry Confirmation
+    # =========================
     st.subheader("📊 Decision Matrix – Top 10 Saham Sinkron")
-    df_rank["Decision"] = df_rank.apply(lambda r: decide_action(r, active_mode), axis=1)
-
-    styled_df = (
-        df_rank[["Ticker", "Sync", "RSI14", "TrendScore", "Score", "Decision"]]
-        .style
-        .applymap(color_decision, subset=["Decision"])
+    
+    # 1️⃣ Decision dasar (berdasarkan mode)
+    df_rank["Decision"] = df_rank.apply(
+        lambda r: decide_action(r, active_mode),
+        axis=1
     )
+    
+    # 2️⃣ Entry confirmation (HANYA untuk BUY)
+    df_rank["Confirmed"] = df_rank.apply(
+        lambda r: entry_confirmation(r) if r["Decision"] == "BUY" else False,
+        axis=1
+    )
+    
+    # 3️⃣ Final Action (hasil akhir yang boleh dieksekusi)
+    df_rank["FinalAction"] = df_rank.apply(
+        lambda r: "BUY" if r["Decision"] == "BUY" and r["Confirmed"] else "WAIT",
+        axis=1
+    )
+    
+    # 4️⃣ Tampilkan
+    styled_df = (
+        df_rank[
+            ["Ticker", "Sync", "RSI14", "TrendScore", "Score", "FinalAction"]
+        ]
+        .style
+        .applymap(color_decision, subset=["FinalAction"])
+    )
+    
     st.dataframe(styled_df, use_container_width=True)
+
 
     # ======================================================
     # BACKTEST — Trigger sidebar, output di tab_auto (rapi)
@@ -429,6 +452,7 @@ with tab_auto:
     
         with st.expander("📋 Detail Equity Log"):
             st.dataframe(eq_df, use_container_width=True)
+
 
 
 
