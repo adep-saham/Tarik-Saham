@@ -160,28 +160,30 @@ with tab_auto:
 
     col1, col2, col3 = st.columns(3)
 
-    if "w30" not in st.session_state:
-        st.session_state.w30 = set()
-        st.session_state.w60 = set()
-        st.session_state.w120 = set()
+    for k in ["w30", "w60", "w120"]:
+        if k not in st.session_state:
+            st.session_state[k] = set()
 
     with col1:
         if st.button("Scan Window 30"):
             with st.spinner("Scanning 30..."):
-                w30, _ = scan_window(30, TICKERS, fetch_data, calc_indicators)
+                w30, debug30 = scan_window(30, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w30 = set(w30)
+                st.caption(f"Debug 30: {len(w30)}")
 
     with col2:
         if st.button("Scan Window 60"):
             with st.spinner("Scanning 60..."):
-                w60, _ = scan_window(60, list(st.session_state.w30 or TICKERS), fetch_data, calc_indicators)
+                w60, debug60 = scan_window(60, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w60 = set(w60)
+                st.caption(f"Debug 60: {len(w60)}")
 
     with col3:
         if st.button("Scan Window 120"):
             with st.spinner("Scanning 120..."):
-                w120, _ = scan_window(120, list(st.session_state.w60 or TICKERS), fetch_data, calc_indicators)
+                w120, debug120 = scan_window(120, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w120 = set(w120)
+                st.caption(f"Debug 120: {len(w120)}")
 
     w30 = st.session_state.w30
     w60 = st.session_state.w60
@@ -201,3 +203,5 @@ with tab_auto:
         )
     else:
         st.warning("Tidak ada saham sinkron saat ini.")
+
+
