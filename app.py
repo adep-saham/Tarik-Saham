@@ -337,12 +337,13 @@ with tab_auto:
 
 
 
-
+    st.caption(f"Universe IDX (filtered): {len(TICKERS)} saham")
     st.caption(
         "Auto Sync menampilkan saham dengan sinyal multi-window "
         "yang sudah selaras (30/60/120)."
     )
-    st.caption(f"Universe IDX (filtered): {len(TICKERS)} saham")
+    
+
 
 
 
