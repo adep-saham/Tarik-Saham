@@ -18,28 +18,31 @@ def _ensure_rsi14(df: pd.DataFrame) -> pd.DataFrame:
 def scan_window(
     window: int,
     tickers: list[str],
-    load_price_data,          # fungsi dari app.py (biar tidak import silang)
-    calc_indicators=None,     # opsional: fungsi indikator kamu
-    relaxed: bool = True,     # True = fast>=slow*0.99 (lebih realistis), False = fast>slow
+    load_price_data,
+    calc_indicators=None,
+    relaxed: bool = True,
 ) -> tuple[list[str], dict]:
-    """
-    Scan saham yang lolos rule untuk 1 window.
-    Return: (results, stats)
-    stats berguna buat debug/performa.
-    """
+
     results = []
     stats = {
+        "total": 0,
         "none": 0,
         "short": 0,
         "no_close": 0,
         "nan_ind": 0,
         "cond_fail": 0,
         "exc": 0,
+        "passed": 0,
     }
 
+    min_len = window * 2
+
     for ticker in tickers:
+        stats["total"] += 1
         try:
-            df = load_price_data(ticker)
+            # ⬇️ PAKSA LOAD DATA PANJANG
+            df = load_price_data(ticker, limit=min_len + 50)
+
             if df is None or len(df) == 0:
                 stats["none"] += 1
                 continue
@@ -48,15 +51,13 @@ def scan_window(
                 stats["no_close"] += 1
                 continue
 
-            if len(df) < window * 2:
+            if len(df) < min_len:
                 stats["short"] += 1
                 continue
 
-            # hitung indikator (pakai fungsi kamu kalau ada)
             if calc_indicators is not None:
                 df = calc_indicators(df)
 
-            # pastikan EMA window tersedia (fallback)
             df = _ensure_ema(df, window, f"EMA{window}")
             df = _ensure_ema(df, window * 2, f"EMA{window*2}")
             df = _ensure_rsi14(df)
@@ -70,12 +71,12 @@ def scan_window(
                 stats["nan_ind"] += 1
                 continue
 
-            # RULE (window-aware)
             ema_ok = (fast >= slow * 0.99) if relaxed else (fast > slow)
-            rsi_ok = (rsi >= 40)
+            rsi_ok = rsi >= 40
 
             if ema_ok and rsi_ok:
                 results.append(ticker)
+                stats["passed"] += 1
             else:
                 stats["cond_fail"] += 1
 
@@ -84,3 +85,4 @@ def scan_window(
             continue
 
     return results, stats
+
