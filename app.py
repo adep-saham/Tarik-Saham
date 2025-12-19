@@ -28,6 +28,10 @@ from ui.sidebar import sidebar_inputs
 # ================= SCANNER =================
 from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 
+# ================= RANGKING =================
+from ranking_engine import rank_sync_stocks
+
+
 # ================= PAGE =================
 st.set_page_config(page_title="Tarik Saham – ADP", layout="wide")
 load_theme()
@@ -208,5 +212,18 @@ with tab_auto:
     else:
         st.warning("Tidak ada saham sinkron saat ini.")
 
+    if sync_2of3:
+        st.subheader("🏆 Ranking Top 20 Saham Sinkron")
+    
+        df_rank = rank_sync_stocks(
+            tickers=sync_2of3,
+            w30=w30,
+            w60=w60,
+            w120=w120,
+            load_price_data=fetch_data,
+            calc_indicators=calc_indicators
+        )
+    
+        st.dataframe(df_rank, use_container_width=True)
 
 
