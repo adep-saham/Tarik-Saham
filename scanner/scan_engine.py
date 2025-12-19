@@ -41,8 +41,13 @@ def scan_window(
         stats["total"] += 1
         try:
             # ⬇️ PAKSA LOAD DATA PANJANG
-            df = load_price_data(ticker)
+            # ganti di scan_window()
 
+            df = load_price_data(
+                ticker,
+                period="1y",
+                interval="1d"
+            )
 
             if df is None or len(df) == 0:
                 stats["none"] += 1
