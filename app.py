@@ -29,6 +29,7 @@ from ui.sidebar import sidebar_inputs
 from scanner.scan_engine import scan_window
 from scanner.backtest_engine import backtest_mode
 from scanner.walkforward_engine import walk_forward_validate
+from scanner.equity_engine import build_equity_curve
 
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -129,6 +130,9 @@ st.sidebar.divider()
 st.sidebar.subheader("🔄 Walk-Forward Validation")
 wf_lookback = st.sidebar.selectbox("Lookback (hari)", [3, 5, 7, 10], index=2)
 run_wf = st.sidebar.button("Run Walk-Forward")
+
+st.sidebar.subheader("📈 Equity Curve")
+run_eq = st.sidebar.button("Generate Equity Curve")
 
 
 # ======================================================
@@ -385,4 +389,35 @@ with tab_auto:
             st.dataframe(df_wf, use_container_width=True)
         else:
             st.warning("Tidak ada sinyal BUY pada periode walk-forward.")
+
+    if run_eq and df_rank is not None and not df_rank.empty:
+        with st.spinner("Building equity curve..."):
+            eq_df = build_equity_curve(
+                tickers=df_rank["Ticker"].tolist(),
+                load_price_data=fetch_data,
+                decide_action_func=decide_action,
+                mode=mode,
+                holding_days=5
+            )
+    
+            st.session_state["equity_df"] = eq_df
+
+    eq_df = st.session_state.get("equity_df")
+    
+    if eq_df is not None:
+        st.subheader(f"📈 Equity Curve — Mode {mode}")
+    
+        chart = (
+            eq_df
+            .reset_index(drop=True)
+            .assign(step=lambda x: range(len(x)))
+        )
+    
+        st.line_chart(
+            chart.set_index("step")["Equity"],
+            use_container_width=True
+        )
+    
+        with st.expander("📋 Detail Equity Log"):
+            st.dataframe(eq_df, use_container_width=True)
 
