@@ -27,6 +27,7 @@ from ui.sidebar import sidebar_inputs
 
 # ================= SCANNER =================
 from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
+from scanner.backtest_engine import backtest_mode
 
 # ================= RANGKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -279,6 +280,30 @@ with tab_auto:
         )
         
         st.dataframe(styled_df, use_container_width=True)
+
+st.subheader("🧪 Backtest Mode")
+
+if st.button("Run Backtest (5-day hold)"):
+    modes = ["Momentum", "Pullback", "Strict"]
+    rows = []
+
+    for m in modes:
+        res = backtest_mode(
+            tickers=list(sync_2of3),
+            load_price_data=fetch_data,
+            decide_action_func=decide_action,
+            mode=m,
+            holding_days=5
+        )
+        if res:
+            rows.append(res)
+
+    if rows:
+        df_bt = pd.DataFrame(rows)
+        st.dataframe(df_bt, use_container_width=True)
+    else:
+        st.warning("Backtest tidak menghasilkan trade.")
+
 
 
 
