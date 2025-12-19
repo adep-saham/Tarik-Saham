@@ -28,6 +28,7 @@ from ui.sidebar import sidebar_inputs
 # ================= SCANNER =================
 from scanner.scan_engine import scan_window   # ← ENGINE BARU (AMAN)
 from scanner.backtest_engine import backtest_mode
+from scanner.walkforward_engine import walk_forward_validate
 
 # ================= RANGKING =================
 from scanner.ranking_engine import rank_sync_stocks
@@ -304,6 +305,34 @@ if st.sidebar.button("Run Backtest (5-day hold)"):
         st.dataframe(df_bt, use_container_width=True)
     else:
         st.warning("Backtest tidak menghasilkan trade.")
+
+st.sidebar.subheader("🔄 Walk-Forward Validation")
+
+lookback = st.sidebar.selectbox(
+    "Lookback (hari)",
+    [3, 5, 7, 10],
+    index=2
+)
+
+if st.sidebar.button("Run Walk-Forward"):
+    res = walk_forward_validate(
+        tickers=df_rank["Ticker"].tolist(),
+        load_price_data=fetch_data,
+        decide_action_func=decide_action,
+        mode=mode,
+        lookback_days=lookback
+    )
+
+    if res:
+        df_wf, summary = res
+
+        st.markdown("### 📊 Summary")
+        st.json(summary)
+
+        st.markdown("### 📋 Detail Signal")
+        st.dataframe(df_wf, use_container_width=True)
+    else:
+        st.warning("Tidak ada sinyal BUY pada periode walk-forward.")
 
 
 
