@@ -167,23 +167,27 @@ with tab_auto:
     with col1:
         if st.button("Scan Window 30"):
             with st.spinner("Scanning 30..."):
-                w30, debug30 = scan_window(30, TICKERS, fetch_data, calc_indicators)
+                w30, stats30 = scan_window(30, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w30 = set(w30)
-                st.caption(f"Debug 30: {len(w30)}")
+                st.caption(f"30 stats: {stats30}")
+
 
     with col2:
         if st.button("Scan Window 60"):
             with st.spinner("Scanning 60..."):
-                w60, debug60 = scan_window(60, TICKERS, fetch_data, calc_indicators)
+                w60, stats60 = scan_window(60, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w60 = set(w60)
-                st.caption(f"Debug 60: {len(w60)}")
+                st.caption(f"60 stats: {stats60}")
+
 
     with col3:
         if st.button("Scan Window 120"):
             with st.spinner("Scanning 120..."):
-                w120, debug120 = scan_window(120, TICKERS, fetch_data, calc_indicators)
+                w120, stats120 = scan_window(120, TICKERS, fetch_data, calc_indicators)
                 st.session_state.w120 = set(w120)
-                st.caption(f"Debug 120: {len(w120)}")
+                st.caption(f"120 stats: {stats120}")
+
+
 
     w30 = st.session_state.w30
     w60 = st.session_state.w60
@@ -203,5 +207,6 @@ with tab_auto:
         )
     else:
         st.warning("Tidak ada saham sinkron saat ini.")
+
 
 
