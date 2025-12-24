@@ -307,12 +307,26 @@ with tab_auto:
         axis=1
     )
 
+    def safe_entry_zone(row, mode):
+        if row["Decision"] == "BUY":
+            zone = compute_entry_zone(row, mode)
+            return pd.Series({
+                "EntryLow": zone.get("EntryLow"),
+                "EntryHigh": zone.get("EntryHigh"),
+                "StopLoss": zone.get("StopLoss"),
+            })
+        else:
+            return pd.Series({
+                "EntryLow": None,
+                "EntryHigh": None,
+                "StopLoss": None,
+            })
+    
     df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
-        lambda r: pd.Series(
-            compute_entry_zone(r, active_mode) if r["Decision"] == "BUY" else {}
-        ),
+        lambda r: safe_entry_zone(r, active_mode),
         axis=1
     )
+
 
     df_rank["FinalAction"] = df_rank.apply(
         lambda r: "BUY"
@@ -394,4 +408,5 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
+
 
