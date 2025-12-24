@@ -34,7 +34,10 @@ from scanner.telegram_alert import send_telegram_alert
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
 from scanner.decision_engine import decide_action
+from scanner.auto_scan_bundle import auto_scan_30_60_120
+from scanner.bandarmologi_engine import compute_bandar_rekap
 
+from services.profiler import Profiler
 
 # ======================================================
 # 🚀 PERFORMANCE — CACHE DATA
@@ -237,34 +240,35 @@ with tab_single:
 # TAB 2 — AUTO SYNC
 # ======================================================
 with tab_auto:
-    st.subheader("🤖 Auto Sync Scanner")
+    st.subheader("🤖 Auto Sync Stocks")
 
-    c1, c2, c3 = st.columns(3)
+    # --- Profiler ---
+    prof = Profiler()
 
-    with c1:
-        if st.button("Scan 30"):
-            with st.spinner("Scanning 30..."):
-                w30, _ = safe_scan(30, TICKERS)
-                st.session_state.w30 = set(w30)
+    colA, colB, colC = st.columns([1,1,2])
 
-    with c2:
-        if st.button("Scan 60"):
-            with st.spinner("Scanning 60..."):
-                w60, _ = safe_scan(60, TICKERS)
-                st.session_state.w60 = set(w60)
+    with colA:
+        run_auto = st.button("⚡ SCAN AUTO (30+60+120)")
 
-    with c3:
-        if st.button("Scan 120"):
-            with st.spinner("Scanning 120..."):
-                w120, _ = safe_scan(120, TICKERS)
-                st.session_state.w120 = set(w120)
+    with colB:
+        show_profile = st.checkbox("🧪 Tampilkan Profiling", value=True)
 
-    w30, w60, w120 = (
-        st.session_state.w30,
-        st.session_state.w60,
-        st.session_state.w120
-    )
+    with colC:
+        st.caption("Auto scan akan menjalankan 30→60→120 + progress + cache")
 
+    if run_auto:
+        results = auto_scan_30_60_120(
+            tickers=TICKERS,
+            scan_window_func=scan_window,
+            load_price_data=cached_fetch_data,
+            calc_indicators=calc_indicators,
+            profiler=prof
+        )
+        st.session_state.w30 = results["w30"]
+        st.session_state.w60 = results["w60"]
+        st.session_state.w120 = results["w120"]
+
+    w30, w60, w120 = st.session_state.w30, st.session_state.w60, st.session_state.w120
     sync = (w30 & w60) | (w30 & w120) | (w60 & w120)
 
     st.caption(
@@ -274,15 +278,21 @@ with tab_auto:
         f"Total Sync: {len(sync)}"
     )
 
+    # === PROFILING RESULT ===
+    if show_profile:
+        with st.expander("🧪 Profiling (Step Paling Berat)", expanded=False):
+            st.dataframe(prof.df(), use_container_width=True)
+
     if not sync:
         st.warning("Tidak ada saham sinkron.")
         st.stop()
 
-    df_rank = rank_sync_stocks(
+    # === RANKING (juga diprofiling) ===
+    df_rank = prof.track(
+        "rank_sync_stocks",
+        rank_sync_stocks,
         tickers=sync,
-        w30=w30,
-        w60=w60,
-        w120=w120,
+        w30=w30, w60=w60, w120=w120,
         load_price_data=cached_fetch_data,
         calc_indicators=calc_indicators,
         top_n=20
@@ -291,20 +301,15 @@ with tab_auto:
     active_mode = auto_switch_mode(df_rank) if mode_option == "Auto" else mode_option
     st.info(f"🧠 Active Mode: **{active_mode}**")
 
-    df_rank["Decision"] = df_rank.apply(
-        lambda r: decide_action(r, active_mode), axis=1
-    )
-
+    df_rank["Decision"] = df_rank.apply(lambda r: decide_action(r, active_mode), axis=1)
     df_rank["Confirmed"] = df_rank.apply(
-        lambda r: entry_confirmation(r)
-        if r["Decision"] == "BUY" else False,
+        lambda r: entry_confirmation(r) if r["Decision"] == "BUY" else False,
         axis=1
     )
 
     df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
         lambda r: pd.Series(
-            compute_entry_zone(r, active_mode)
-            if r["Decision"] == "BUY" else {}
+            compute_entry_zone(r, active_mode) if r["Decision"] == "BUY" else {}
         ),
         axis=1
     )
@@ -313,18 +318,47 @@ with tab_auto:
         lambda r: "BUY"
         if r["Decision"] == "BUY"
         and r["Confirmed"]
-        and pd.notna(r["EntryLow"])
+        and pd.notna(r.get("EntryLow"))
         else "WAIT",
         axis=1
     )
 
     st.subheader("📊 Decision Matrix")
     st.dataframe(
-        df_rank[
-            ["Ticker", "FinalAction", "EntryLow", "EntryHigh", "StopLoss"]
-        ].style.applymap(color_decision, subset=["FinalAction"]),
+        df_rank[["Ticker", "FinalAction", "EntryLow", "EntryHigh", "StopLoss"]]
+        .style.applymap(color_decision, subset=["FinalAction"]),
         use_container_width=True
     )
+
+    # ======================================================
+    # 📊 BANDARMOLOGI — Upload Broker Summary CSV
+    # ======================================================
+    st.subheader("🏦 Rekap Bandarmologi (Upload Broker Summary)")
+    st.caption("Upload CSV broker summary dari Stockbit/RTI/TradingView/broker. Minimal: date, broker, type(BY/SL), lot, avg(optional).")
+
+    up = st.file_uploader("Upload CSV Broker Summary", type=["csv"], key="broker_csv")
+
+    if up is not None:
+        try:
+            broker_df = pd.read_csv(up)
+            bandar = compute_bandar_rekap(broker_df)
+
+            st.markdown("### ✅ Rekap Tabel Bandar (Remaining Lots + WAP)")
+            st.dataframe(bandar, use_container_width=True)
+
+            # ringkas top bandar akumulasi
+            top_acc = bandar.sort_values("net_lot", ascending=False).head(10)
+            st.markdown("### 🔥 Top 10 Bandar (Net Lot)")
+            st.dataframe(top_acc, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Gagal proses broker CSV: {e}")
+    else:
+        st.info("Belum ada broker CSV. Rekap bandarmologi akan muncul setelah upload.")
+
+    # ===== ALERT & EQUITY (biarkan seperti versi kamu) =====
+    # (tetap gunakan blok alert dan equity curve yang sudah ada)
+
 
     if enable_alerts:
         current = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
@@ -360,3 +394,4 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
+
