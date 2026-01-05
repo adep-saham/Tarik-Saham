@@ -80,7 +80,7 @@ tab_single, tab_auto = st.tabs([
 
 
 # ======================================================
-# TAB 1 — SINGLE STOCK (PRO)
+# TAB 1 — SINGLE STOCK (PRO, FIXED)
 # ======================================================
 with tab_single:
     (
@@ -137,15 +137,21 @@ with tab_single:
         plan
     )
 
-    # ===== DECISION ENGINE (SAMA DENGAN AUTO SYNC) =====
+    # ======================================================
+    # 🔑 ROW DISAMAKAN DENGAN AUTO SYNC (FIX Sync)
+    # ======================================================
     row = pd.Series({
+        "Ticker": ticker,
         "Close": safe_float(last["Close"]),
         "RSI14": safe_float(last["RSI14"]),
         "Trend": plan.get("trend"),
         "Status": plan.get("status"),
-        "Score": conf.get("score")
+        "Score": conf.get("score"),
+        "Sync": 1,            # ⬅️ FIX UTAMA (WAJIB)
+        "Window": "SINGLE",   # optional, info saja
     })
 
+    # ===== DECISION ENGINE (SAMA DENGAN AUTO SYNC) =====
     decision = decide_action(row, p["mode"])
     zone = compute_entry_zone(row, p["mode"]) if decision == "BUY" else {}
 
@@ -183,6 +189,7 @@ with tab_single:
         ["EMA20 > EMA50", last["EMA20"], last["EMA50"], last["EMA20"] > last["EMA50"]],
         ["RSI14", row["RSI14"], "40–70", 40 <= row["RSI14"] <= 70],
         ["Confidence", row["Score"], "≥ 75", row["Score"] >= 75],
+        ["Sync", row["Sync"], "≥ 1", row["Sync"] >= 1],
     ], columns=["Item", "Value", "Rule", "Pass"])
 
     st.dataframe(checklist, width="stretch")
@@ -214,7 +221,7 @@ with tab_single:
 
 
 # ======================================================
-# TAB 2 — AUTO SYNC (UTUH, TIDAK DIUBAH)
+# TAB 2 — AUTO SYNC (TIDAK DIUBAH)
 # ======================================================
 with tab_auto:
     st.subheader("🤖 Auto Sync Stocks (30 / 60 / 120)")
