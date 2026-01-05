@@ -93,6 +93,7 @@ with tab_single:
         lot_size,
         analyze_btn
     ) = sidebar_inputs()
+    bandar_mode, bandar_top_n = sidebar_bandarmology()
 
     mode = st.selectbox(
         "🧠 Mode Trading",
@@ -415,6 +416,7 @@ with tab_auto:
         df_rank[["Ticker", "Decision", "EntryLow", "EntryHigh", "StopLoss"]],
         width="stretch"
     )
+
 
 
 
