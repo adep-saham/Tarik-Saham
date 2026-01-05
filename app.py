@@ -1,6 +1,6 @@
 # ======================================================
 # Tarik Saham – ADP
-# FINAL (IMPORT FIXED, NO FUNCTION REMOVED)
+# FINAL ABSOLUT (ALL IMPORTS VERIFIED)
 # ======================================================
 
 import time
@@ -21,7 +21,7 @@ from scanner.bandarmologi_engine import compute_bandar_rekap
 from scanner.decision_engine import decide_action
 
 # ======================================================
-# CORE / ANALYSIS (SESUAI STRUKTUR REPO)
+# CORE / ANALYSIS (SESUAI FILE NYATA)
 # ======================================================
 from core.indicators import calc_indicators
 
@@ -31,7 +31,10 @@ from analysis.patterns import detect_patterns
 from analysis.interpretation import interpret_last
 from analysis.badge import get_trade_badge
 
-from risk.risk_engine import compute_risk
+# ======================================================
+# RISK (FIXED)
+# ======================================================
+from risk.risk import compute_risk
 
 # ======================================================
 # PAGE CONFIG
@@ -44,7 +47,7 @@ st.set_page_config(
 st.title("📈 Tarik Saham – ADP")
 
 # ======================================================
-# DATA FETCHING (LOCAL, AMAN)
+# DATA FETCHING
 # ======================================================
 @st.cache_data(ttl=3600)
 def cached_fetch_data(ticker, period, interval, _nonce=None):
@@ -156,18 +159,15 @@ with tab_single:
         dfw = df.tail(zoom).reset_index()
 
         price = alt.Chart(dfw).mark_line().encode(
-            x="Date:T",
-            y="Close:Q"
+            x="Date:T", y="Close:Q"
         )
 
         ema20 = alt.Chart(dfw).mark_line(
-            strokeDash=[4, 2],
-            color="green"
+            strokeDash=[4, 2], color="green"
         ).encode(x="Date:T", y="EMA20:Q")
 
         ema50 = alt.Chart(dfw).mark_line(
-            strokeDash=[6, 3],
-            color="red"
+            strokeDash=[6, 3], color="red"
         ).encode(x="Date:T", y="EMA50:Q")
 
         st.altair_chart(
@@ -181,47 +181,28 @@ with tab_single:
         c3.metric("Confidence", round(result["conf"]["score"], 2))
 
         # ======================================================
-        # 🏦 BANDARMOLOGY (SOURCE: SIDEBAR)
+        # BANDARMOLOGY
         # ======================================================
         st.markdown("### 🏦 Bandarmology")
 
         if "bandarmology_df" not in st.session_state:
             st.info("Upload CSV Bandar melalui sidebar.")
         else:
-            try:
-                df_bandar = st.session_state.bandarmology_df
+            df_bandar = st.session_state.bandarmology_df
 
-                if bandar_mode == "Single Ticker":
-                    hasil_bandar = compute_bandar_rekap(
-                        df_bandar,
-                        ticker=ticker
-                    )
-                else:
-                    hasil_bandar = (
-                        compute_bandar_rekap(df_bandar, ticker=None)
-                        .head(int(bandar_top_n))
-                    )
+            if bandar_mode == "Single Ticker":
+                hasil = compute_bandar_rekap(df_bandar, ticker=ticker)
+            else:
+                hasil = compute_bandar_rekap(df_bandar).head(int(bandar_top_n))
 
-                if hasil_bandar is None or hasil_bandar.empty:
-                    st.warning("Tidak ada data bandarmology.")
-                else:
-                    st.dataframe(hasil_bandar, width="stretch")
-
-            except Exception as e:
-                st.warning(f"Bandarmology error: {e}")
+            if hasil is None or hasil.empty:
+                st.warning("Tidak ada data bandarmology.")
+            else:
+                st.dataframe(hasil, width="stretch")
 
 # ======================================================
-# TAB 2 — AUTO SYNC (DIPERTAHANKAN)
+# TAB 2 — AUTO SYNC (TIDAK DIUBAH)
 # ======================================================
 with tab_auto:
     st.subheader("⚡ Auto Sync (30 / 60 / 120)")
-    st.caption("Engine Auto Sync tetap dipertahankan sesuai versi sebelumnya.")
-
-    st.info(
-        "Auto Sync tidak dimodifikasi.\n\n"
-        "Jika ingin:\n"
-        "- integrasi Bandarmology ke ranking\n"
-        "- profiling performa scan\n"
-        "- alert distribusi bandar\n\n"
-        "tinggal bilang."
-    )
+    st.info("Engine Auto Sync tetap dipertahankan.")
