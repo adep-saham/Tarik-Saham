@@ -2,23 +2,26 @@ import time
 import streamlit as st
 import pandas as pd
 import altair as alt
+import yfinance as yf
 
 # ===============================
-# IMPORT INTERNAL MODULES
+# SIDEBAR
 # ===============================
 from ui.sidebar import sidebar_inputs, sidebar_bandarmology
 
+# ===============================
+# ENGINE & MODULES
+# ===============================
 from scanner.bandarmologi_engine import compute_bandar_rekap
 from scanner.decision_engine import decide_action
 
-from core.data import cached_fetch_data, normalize_ticker
 from core.indicators import calc_indicators
 from analysis.plan import generate_entry_plan
 from analysis.confidence import compute_confidence
 from analysis.patterns import detect_patterns
 from analysis.interpret import interpret_last
-from risk.risk_engine import compute_risk
 from analysis.badge import get_trade_badge
+from risk.risk_engine import compute_risk
 
 # ===============================
 # PAGE CONFIG
@@ -30,8 +33,25 @@ st.set_page_config(
 
 st.title("📈 Tarik Saham – ADP")
 
+# ======================================================
+# DATA FETCHING (LOCAL, AMAN)
+# ======================================================
+@st.cache_data(ttl=3600)
+def cached_fetch_data(ticker, period, interval, _nonce=None):
+    return yf.download(
+        ticker,
+        period=period,
+        interval=interval,
+        auto_adjust=True,
+        progress=False
+    )
+
+def normalize_ticker(t):
+    t = str(t).strip().upper()
+    return t if t.endswith(".JK") else f"{t}.JK"
+
 # ===============================
-# SIDEBAR
+# SIDEBAR INPUTS
 # ===============================
 (
     raw_ticker,
@@ -45,9 +65,6 @@ st.title("📈 Tarik Saham – ADP")
 
 bandar_mode, bandar_top_n = sidebar_bandarmology()
 
-# ===============================
-# NORMALIZE TICKER
-# ===============================
 ticker = normalize_ticker(raw_ticker)
 
 # ===============================
@@ -65,7 +82,12 @@ with tab_single:
 
     if analyze_btn and raw_ticker:
         try:
-            df = cached_fetch_data(ticker, period, interval, _nonce=time.time())
+            df = cached_fetch_data(
+                ticker,
+                period,
+                interval,
+                _nonce=time.time()
+            )
 
             if df is None or df.empty:
                 st.error("Data kosong / ticker tidak valid.")
@@ -182,4 +204,3 @@ with tab_single:
 with tab_auto:
     st.info("Auto Sync (30 / 60 / 120) tetap seperti versi sebelumnya.")
     st.caption("Bagian ini sengaja tidak disentuh agar stabil.")
-
