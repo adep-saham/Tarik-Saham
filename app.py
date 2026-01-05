@@ -1,6 +1,6 @@
 # ======================================================
 # Tarik Saham – ADP
-# FINAL STABLE VERSION
+# FINAL (IMPORT FIXED, NO FUNCTION REMOVED)
 # ======================================================
 
 import time
@@ -15,17 +15,22 @@ import yfinance as yf
 from ui.sidebar import sidebar_inputs, sidebar_bandarmology
 
 # ======================================================
-# ENGINES & MODULES (SESUAI REPO)
+# ENGINE
 # ======================================================
 from scanner.bandarmologi_engine import compute_bandar_rekap
 from scanner.decision_engine import decide_action
 
+# ======================================================
+# CORE / ANALYSIS (SESUAI STRUKTUR REPO)
+# ======================================================
 from core.indicators import calc_indicators
-from analysis.plan import generate_entry_plan
+
+from analysis.entry_plan import generate_entry_plan
 from analysis.confidence import compute_confidence
 from analysis.patterns import detect_patterns
-from analysis.interpret import interpret_last
+from analysis.interpretation import interpret_last
 from analysis.badge import get_trade_badge
+
 from risk.risk_engine import compute_risk
 
 # ======================================================
@@ -101,6 +106,7 @@ with tab_single:
                 last = df.iloc[-1]
 
                 plan = generate_entry_plan(df)
+
                 conf = compute_confidence(
                     df,
                     last,
@@ -150,15 +156,18 @@ with tab_single:
         dfw = df.tail(zoom).reset_index()
 
         price = alt.Chart(dfw).mark_line().encode(
-            x="Date:T", y="Close:Q"
+            x="Date:T",
+            y="Close:Q"
         )
 
         ema20 = alt.Chart(dfw).mark_line(
-            strokeDash=[4, 2], color="green"
+            strokeDash=[4, 2],
+            color="green"
         ).encode(x="Date:T", y="EMA20:Q")
 
         ema50 = alt.Chart(dfw).mark_line(
-            strokeDash=[6, 3], color="red"
+            strokeDash=[6, 3],
+            color="red"
         ).encode(x="Date:T", y="EMA50:Q")
 
         st.altair_chart(
@@ -172,7 +181,7 @@ with tab_single:
         c3.metric("Confidence", round(result["conf"]["score"], 2))
 
         # ======================================================
-        # 🏦 BANDARMOLOGY (DARI SIDEBAR)
+        # 🏦 BANDARMOLOGY (SOURCE: SIDEBAR)
         # ======================================================
         st.markdown("### 🏦 Bandarmology")
 
@@ -183,38 +192,36 @@ with tab_single:
                 df_bandar = st.session_state.bandarmology_df
 
                 if bandar_mode == "Single Ticker":
-                    st.caption(f"Mode: Single Ticker ({ticker})")
                     hasil_bandar = compute_bandar_rekap(
                         df_bandar,
                         ticker=ticker
                     )
                 else:
-                    st.caption(f"Mode: All Tickers (Top {bandar_top_n})")
                     hasil_bandar = (
                         compute_bandar_rekap(df_bandar, ticker=None)
                         .head(int(bandar_top_n))
                     )
 
                 if hasil_bandar is None or hasil_bandar.empty:
-                    st.warning("Tidak ada data bandarmology untuk ditampilkan.")
+                    st.warning("Tidak ada data bandarmology.")
                 else:
                     st.dataframe(hasil_bandar, width="stretch")
 
             except Exception as e:
-                st.warning(f"Bandarmology gagal diproses: {e}")
+                st.warning(f"Bandarmology error: {e}")
 
 # ======================================================
-# TAB 2 — AUTO SYNC (30 / 60 / 120)
+# TAB 2 — AUTO SYNC (DIPERTAHANKAN)
 # ======================================================
 with tab_auto:
     st.subheader("⚡ Auto Sync (30 / 60 / 120)")
-    st.caption("Mode scan sinkron antar window. Engine tetap dipertahankan.")
+    st.caption("Engine Auto Sync tetap dipertahankan sesuai versi sebelumnya.")
 
     st.info(
-        "Auto Sync engine tetap seperti versi sebelumnya.\n\n"
-        "Jika kamu ingin, kita bisa sambungkan:\n"
-        "- Ranking Auto Sync\n"
-        "- Bandarmology Strength\n"
-        "- Decision Engine\n\n"
-        "➡️ bilang saja."
+        "Auto Sync tidak dimodifikasi.\n\n"
+        "Jika ingin:\n"
+        "- integrasi Bandarmology ke ranking\n"
+        "- profiling performa scan\n"
+        "- alert distribusi bandar\n\n"
+        "tinggal bilang."
     )
