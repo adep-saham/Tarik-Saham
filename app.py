@@ -22,7 +22,8 @@ from risk.risk_management import compute_risk
 
 # ================= UI =================
 from ui.theme import load_theme
-from ui.sidebar import sidebar_inputs
+from ui.sidebar import sidebar_inputs, sidebar_bandarmology
+
 
 # ================= AUTO SYNC =================
 from scanner.scan_engine import scan_window
@@ -414,6 +415,7 @@ with tab_auto:
         df_rank[["Ticker", "Decision", "EntryLow", "EntryHigh", "StopLoss"]],
         width="stretch"
     )
+
 
 
 
