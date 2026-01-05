@@ -44,8 +44,8 @@ from services.profiler import Profiler
 # ======================================================
 # 🚀 PERFORMANCE — CACHE DATA
 # ======================================================
-@st.cache_data(ttl=15 * 60, show_spinner=False)
-def cached_fetch_data(ticker, period="6mo", interval="1d"):
+@st.cache_data(ttl=15 * 60)
+def cached_fetch_data(ticker, period="6mo", interval="1d", _nonce=None):
     return fetch_data(ticker, period, interval)
 
 
@@ -100,6 +100,9 @@ st.markdown("## 📊 Tarik Saham – ADP (Upgraded)")
 for k in ["w30", "w60", "w120"]:
     if k not in st.session_state:
         st.session_state[k] = set()
+
+if "single_params" not in st.session_state:
+    st.session_state.single_params = None
 
 if "single_result" not in st.session_state:
     st.session_state.single_result = None
@@ -199,23 +202,35 @@ with tab_single:
         analyze_btn
     ) = sidebar_inputs()
 
-    # === TRIGGER ===
+    # ==================================================
+    # 🔘 BUTTON TRIGGER (INI KUNCI)
+    # ==================================================
     if analyze_btn and raw_ticker:
+        st.cache_data.clear()   # ⬅️ CLEAR CACHE
         st.session_state.single_params = {
             "raw_ticker": raw_ticker,
             "period": period,
             "interval": interval,
+            "nonce": time.time(),   # ⬅️ FORCE CACHE MISS
         }
         st.session_state.single_result = None
+        st.rerun()              # ⬅️ FORCE RE-RUN
 
     params = st.session_state.single_params
     if not params:
         st.info("Klik **Analisa** di sidebar.")
         st.stop()
 
-    # === ANALYSIS (STATE-BASED) ===
+    # ==================================================
+    # 🔄 DATA LOAD (PASTI FRESH)
+    # ==================================================
     ticker = normalize_ticker(params["raw_ticker"])
-    df = cached_fetch_data(ticker, params["period"], params["interval"])
+    df = cached_fetch_data(
+        ticker,
+        params["period"],
+        params["interval"],
+        _nonce=params["nonce"]
+    )
 
     if df is None or df.empty:
         st.error("Data kosong / ticker tidak valid.")
@@ -224,18 +239,23 @@ with tab_single:
     df = calc_indicators(df)
     last = df.iloc[-1]
 
+    # ==================================================
+    # 🧠 ANALYSIS
+    # ==================================================
     desc = interpret_last(last)
     patterns = detect_patterns(df)
     plan = generate_entry_plan(df)
     conf = compute_confidence(df, last, desc, patterns, plan)
 
-    close_px = safe_float(last["Close"])
-    rsi = safe_float(last["RSI14"])
-    trend = plan_get(plan, "trend", default="-")
-    status = plan_get(plan, "status", default=None)
+    close_px = safe_float(last.get("Close"))
+    rsi = safe_float(last.get("RSI14"))
+    trend = plan.get("trend", "-")
+    status = plan.get("status")
     score = conf.get("score", 0)
 
-    # === DECISION GATE ===
+    # ==================================================
+    # ✅ DECISION GATE
+    # ==================================================
     if score >= 80 and trend == "UP" and rsi > 35 and status == "READY":
         decision = "BUY"
     elif score >= 70 and rsi <= 30:
@@ -243,39 +263,50 @@ with tab_single:
     else:
         decision = "WAIT"
 
-    # === ENTRY ZONE ===
-    entry_low = plan_get(plan, "entry_low")
-    entry_high = plan_get(plan, "entry_high")
-    stop_loss = plan_get(plan, "stop_loss")
+    # ==================================================
+    # ENTRY & RISK
+    # ==================================================
+    entry_low = plan.get("entry_low")
+    entry_high = plan.get("entry_high")
+    stop_loss = plan.get("stop_loss")
 
     if decision != "BUY":
         entry_low = entry_high = stop_loss = None
 
-    risk = compute_risk(capital, risk_pct, lot_size, plan, close_px)
+    risk = compute_risk(
+        capital,
+        risk_pct,
+        lot_size,
+        plan,
+        close_px
+    )
 
-    # === SAVE RESULT ===
+    # ==================================================
+    # SAVE RESULT
+    # ==================================================
     st.session_state.single_result = {
         "ticker": ticker,
         "df": df,
         "last": last,
         "decision": decision,
-        "entry": (entry_low, entry_high, stop_loss),
-        "risk": risk,
         "score": score,
         "rsi": rsi,
         "trend": trend,
         "status": status,
+        "entry": (entry_low, entry_high, stop_loss),
+        "risk": risk,
         "conf": conf,
         "plan": plan,
         "desc": desc,
         "patterns": patterns,
+        "params": params,
     }
 
     r = st.session_state.single_result
 
-    # ======================================================
-    # RENDER
-    # ======================================================
+    # ==================================================
+    # 🖥️ RENDER
+    # ==================================================
     if r["decision"] == "BUY":
         st.subheader(f"{r['ticker']} — 🟢 BUY")
     elif r["decision"] == "WAIT_OVERSOLD":
@@ -284,6 +315,7 @@ with tab_single:
         st.subheader(f"{r['ticker']} — ⚪ WAIT")
 
     st.caption(
+        f"Period: {params['period']} | Interval: {params['interval']} | "
         f"Trend: {r['trend']} | Status: {r['status']} | "
         f"Score: {r['score']} | RSI: {r['rsi']}"
     )
@@ -292,14 +324,20 @@ with tab_single:
         "Window",
         [30, 60, 120],
         value=30,
-        key=f"zoom_{ticker}_{period}_{interval}"
+        key=f"zoom_{ticker}_{params['period']}_{params['interval']}_{params['nonce']}"
     )
 
     dfw = r["df"].tail(zoom).reset_index()
 
-    price = alt.Chart(dfw).mark_line().encode(x="Date:T", y="Close:Q")
-    ema20 = alt.Chart(dfw).mark_line(strokeDash=[4, 2], color="green").encode(x="Date:T", y="EMA20:Q")
-    ema50 = alt.Chart(dfw).mark_line(strokeDash=[6, 3], color="red").encode(x="Date:T", y="EMA50:Q")
+    price = alt.Chart(dfw).mark_line().encode(
+        x="Date:T", y="Close:Q"
+    )
+    ema20 = alt.Chart(dfw).mark_line(
+        strokeDash=[4, 2], color="green"
+    ).encode(x="Date:T", y="EMA20:Q")
+    ema50 = alt.Chart(dfw).mark_line(
+        strokeDash=[6, 3], color="red"
+    ).encode(x="Date:T", y="EMA50:Q")
 
     st.altair_chart(price + ema20 + ema50, use_container_width=True)
 
@@ -318,11 +356,11 @@ with tab_single:
 
     st.markdown("### 🧠 Decision Reason")
     if r["decision"] == "BUY":
-        st.success("Trend UP + Score tinggi + RSI sehat")
+        st.success("Trend UP, confidence tinggi, RSI sehat.")
     elif r["decision"] == "WAIT_OVERSOLD":
-        st.warning("Oversold ekstrem — tunggu base / rebound")
+        st.warning("Oversold ekstrem — tunggu base / rebound.")
     else:
-        st.info("Belum memenuhi kriteria BUY")
+        st.info("Belum memenuhi kriteria BUY.")
 
     with st.expander("Detail Confidence"):
         st.json(r["conf"])
@@ -492,5 +530,6 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
+
 
 
