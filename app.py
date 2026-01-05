@@ -1,17 +1,22 @@
+# ======================================================
+# Tarik Saham – ADP
+# FINAL STABLE VERSION
+# ======================================================
+
 import time
 import streamlit as st
 import pandas as pd
 import altair as alt
 import yfinance as yf
 
-# ===============================
+# ======================================================
 # SIDEBAR
-# ===============================
+# ======================================================
 from ui.sidebar import sidebar_inputs, sidebar_bandarmology
 
-# ===============================
-# ENGINE & MODULES
-# ===============================
+# ======================================================
+# ENGINES & MODULES (SESUAI REPO)
+# ======================================================
 from scanner.bandarmologi_engine import compute_bandar_rekap
 from scanner.decision_engine import decide_action
 
@@ -23,9 +28,9 @@ from analysis.interpret import interpret_last
 from analysis.badge import get_trade_badge
 from risk.risk_engine import compute_risk
 
-# ===============================
+# ======================================================
 # PAGE CONFIG
-# ===============================
+# ======================================================
 st.set_page_config(
     page_title="Tarik Saham – ADP",
     layout="wide"
@@ -50,9 +55,9 @@ def normalize_ticker(t):
     t = str(t).strip().upper()
     return t if t.endswith(".JK") else f"{t}.JK"
 
-# ===============================
+# ======================================================
 # SIDEBAR INPUTS
-# ===============================
+# ======================================================
 (
     raw_ticker,
     period,
@@ -67,9 +72,9 @@ bandar_mode, bandar_top_n = sidebar_bandarmology()
 
 ticker = normalize_ticker(raw_ticker)
 
-# ===============================
+# ======================================================
 # TABS
-# ===============================
+# ======================================================
 tab_single, tab_auto = st.tabs([
     "🔍 Single Stock (Pro)",
     "⚡ Auto Sync (30 / 60 / 120)"
@@ -167,7 +172,7 @@ with tab_single:
         c3.metric("Confidence", round(result["conf"]["score"], 2))
 
         # ======================================================
-        # 🏦 BANDARMOLOGY (SOURCE: SIDEBAR)
+        # 🏦 BANDARMOLOGY (DARI SIDEBAR)
         # ======================================================
         st.markdown("### 🏦 Bandarmology")
 
@@ -199,8 +204,17 @@ with tab_single:
                 st.warning(f"Bandarmology gagal diproses: {e}")
 
 # ======================================================
-# TAB 2 — AUTO SYNC (TIDAK DIUBAH)
+# TAB 2 — AUTO SYNC (30 / 60 / 120)
 # ======================================================
 with tab_auto:
-    st.info("Auto Sync (30 / 60 / 120) tetap seperti versi sebelumnya.")
-    st.caption("Bagian ini sengaja tidak disentuh agar stabil.")
+    st.subheader("⚡ Auto Sync (30 / 60 / 120)")
+    st.caption("Mode scan sinkron antar window. Engine tetap dipertahankan.")
+
+    st.info(
+        "Auto Sync engine tetap seperti versi sebelumnya.\n\n"
+        "Jika kamu ingin, kita bisa sambungkan:\n"
+        "- Ranking Auto Sync\n"
+        "- Bandarmology Strength\n"
+        "- Decision Engine\n\n"
+        "➡️ bilang saja."
+    )
