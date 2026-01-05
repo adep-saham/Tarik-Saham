@@ -199,171 +199,136 @@ with tab_single:
         analyze_btn
     ) = sidebar_inputs()
 
-    # --- TRIGGER: simpan parameter saat tombol diklik ---
+    # === TRIGGER ===
     if analyze_btn and raw_ticker:
         st.session_state.single_params = {
             "raw_ticker": raw_ticker,
             "period": period,
             "interval": interval,
         }
-        # optional: reset hasil agar pasti berubah
         st.session_state.single_result = None
 
-    # --- JALANKAN ANALISA BERDASARKAN STATE (bukan tombol sesaat) ---
     params = st.session_state.single_params
-
     if not params:
         st.info("Klik **Analisa** di sidebar.")
         st.stop()
 
-    try:
-        ticker = normalize_ticker(params["raw_ticker"])
-        df = cached_fetch_data(ticker, params["period"], params["interval"])
+    # === ANALYSIS (STATE-BASED) ===
+    ticker = normalize_ticker(params["raw_ticker"])
+    df = cached_fetch_data(ticker, params["period"], params["interval"])
 
-        if df is None or df.empty:
-            st.error("Data kosong / ticker tidak valid.")
-            st.stop()
-
-        df = calc_indicators(df)
-        last = df.iloc[-1]
-
-        # --- CORE ANALYSIS ---
-        desc = interpret_last(last)
-        patterns = detect_patterns(df)
-        plan = generate_entry_plan(df)
-        conf = compute_confidence(df, last, desc, patterns, plan)
-
-        close_px = safe_float(last.get("Close"))
-        rsi = safe_float(last.get("RSI14"))
-        trend = plan_get(plan, "trend", default="-")
-        score = conf.get("score", 0)
-
-        risk = compute_risk(capital, risk_pct, lot_size, plan, close_px)
-
-        badge_text, _ = get_trade_badge(
-            score,
-            plan_get(plan, "status", default=None),
-            trend
-        )
-
-        # --- DECISION GATE ---
-        status = plan_get(plan, "status", default=None)
-
-        if score >= 80 and trend == "UP" and (rsi is None or rsi > 35) and status == "READY":
-            decision = "BUY"
-        elif score >= 70 and (rsi is not None and rsi <= 30):
-            decision = "WAIT_OVERSOLD"
-        else:
-            decision = "WAIT"
-
-        # --- ENTRY ZONE (show only when BUY) ---
-        entry_low = plan_get(plan, "entry_low", "EntryLow", default=None)
-        entry_high = plan_get(plan, "entry_high", "EntryHigh", default=None)
-        stop_loss = plan_get(plan, "stop_loss", "StopLoss", default=None)
-
-        if decision != "BUY":
-            entry_low, entry_high, stop_loss = None, None, None
-
-        st.session_state.single_result = {
-            "ticker": ticker,
-            "df": df,
-            "last": last,
-            "desc": desc,
-            "patterns": patterns,
-            "plan": plan,
-            "conf": conf,
-            "risk": risk,
-            "badge": badge_text,
-            "decision": decision,
-            "entry": {"EntryLow": entry_low, "EntryHigh": entry_high, "StopLoss": stop_loss},
-            "meta": {"score": score, "rsi": rsi, "trend": trend, "status": status, "close": close_px},
-            "params": params,  # simpan biar kelihatan sedang analisa apa
-        }
-
-    except Exception as e:
-        st.error(f"Single analysis error: {e}")
+    if df is None or df.empty:
+        st.error("Data kosong / ticker tidak valid.")
         st.stop()
 
-    # ==============================
-    # RENDER RESULT
-    # ==============================
-    result = st.session_state.single_result
-    df = result["df"]
-    last = result["last"]
-    decision = result["decision"]
-    meta = result["meta"]
-    score = meta["score"]
-    rsi = meta["rsi"]
-    trend = meta["trend"]
-    status = meta["status"]
+    df = calc_indicators(df)
+    last = df.iloc[-1]
 
-    # HEADER
-    if decision == "BUY":
-        st.subheader(f"{result['ticker']} — 🟢 BUY")
-    elif decision == "WAIT_OVERSOLD":
-        st.subheader(f"{result['ticker']} — 🟡 WAIT (Oversold)")
+    desc = interpret_last(last)
+    patterns = detect_patterns(df)
+    plan = generate_entry_plan(df)
+    conf = compute_confidence(df, last, desc, patterns, plan)
+
+    close_px = safe_float(last["Close"])
+    rsi = safe_float(last["RSI14"])
+    trend = plan_get(plan, "trend", default="-")
+    status = plan_get(plan, "status", default=None)
+    score = conf.get("score", 0)
+
+    # === DECISION GATE ===
+    if score >= 80 and trend == "UP" and rsi > 35 and status == "READY":
+        decision = "BUY"
+    elif score >= 70 and rsi <= 30:
+        decision = "WAIT_OVERSOLD"
     else:
-        st.subheader(f"{result['ticker']} — ⚪ WAIT")
+        decision = "WAIT"
+
+    # === ENTRY ZONE ===
+    entry_low = plan_get(plan, "entry_low")
+    entry_high = plan_get(plan, "entry_high")
+    stop_loss = plan_get(plan, "stop_loss")
+
+    if decision != "BUY":
+        entry_low = entry_high = stop_loss = None
+
+    risk = compute_risk(capital, risk_pct, lot_size, plan, close_px)
+
+    # === SAVE RESULT ===
+    st.session_state.single_result = {
+        "ticker": ticker,
+        "df": df,
+        "last": last,
+        "decision": decision,
+        "entry": (entry_low, entry_high, stop_loss),
+        "risk": risk,
+        "score": score,
+        "rsi": rsi,
+        "trend": trend,
+        "status": status,
+        "conf": conf,
+        "plan": plan,
+        "desc": desc,
+        "patterns": patterns,
+    }
+
+    r = st.session_state.single_result
+
+    # ======================================================
+    # RENDER
+    # ======================================================
+    if r["decision"] == "BUY":
+        st.subheader(f"{r['ticker']} — 🟢 BUY")
+    elif r["decision"] == "WAIT_OVERSOLD":
+        st.subheader(f"{r['ticker']} — 🟡 WAIT (Oversold)")
+    else:
+        st.subheader(f"{r['ticker']} — ⚪ WAIT")
 
     st.caption(
-        f"Params: {params['raw_ticker']} | {params['period']} | {params['interval']}  "
-        f"| Badge: {result['badge']} | Trend: {trend} | Status: {status} | Score: {score} | RSI: {rsi}"
+        f"Trend: {r['trend']} | Status: {r['status']} | "
+        f"Score: {r['score']} | RSI: {r['rsi']}"
     )
 
-    # CHART (key dibuat unik per ticker+period+interval agar selalu refresh)
     zoom = st.select_slider(
-        "🔍 Window Analisa",
-        options=[30, 60, 120],
+        "Window",
+        [30, 60, 120],
         value=30,
-        key=f"single_zoom_{ticker}_{params['period']}_{params['interval']}"
+        key=f"zoom_{ticker}_{period}_{interval}"
     )
 
-    dfw = df.tail(zoom).reset_index()
+    dfw = r["df"].tail(zoom).reset_index()
 
     price = alt.Chart(dfw).mark_line().encode(x="Date:T", y="Close:Q")
-    ema20 = alt.Chart(dfw).mark_line(color="green", strokeDash=[4, 2]).encode(x="Date:T", y="EMA20:Q")
-    ema50 = alt.Chart(dfw).mark_line(color="red", strokeDash=[6, 3]).encode(x="Date:T", y="EMA50:Q")
+    ema20 = alt.Chart(dfw).mark_line(strokeDash=[4, 2], color="green").encode(x="Date:T", y="EMA20:Q")
+    ema50 = alt.Chart(dfw).mark_line(strokeDash=[6, 3], color="red").encode(x="Date:T", y="EMA50:Q")
 
-    st.altair_chart((price + ema20 + ema50).interactive(), use_container_width=True)
+    st.altair_chart(price + ema20 + ema50, use_container_width=True)
 
-    # METRICS
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Close", round(safe_float(last.get("Close")), 2))
-    c2.metric("RSI14", round(safe_float(last.get("RSI14")), 2))
-    c3.metric("Trend", trend)
-    c4.metric("Confidence", round(score, 2))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Close", close_px)
+    c2.metric("RSI14", r["rsi"])
+    c3.metric("Confidence", r["score"])
 
-    # DECISION REASON
+    st.markdown("### 📌 Entry & Risk")
+    el, eh, sl = r["entry"]
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Entry", f"{el} – {eh}" if el else "-")
+    c5.metric("Stop Loss", sl if sl else "-")
+    c6.metric("Risk (Rp)", r["risk"].get("risk_amount", "-"))
+
     st.markdown("### 🧠 Decision Reason")
-    if decision == "BUY":
-        st.success(f"BUY karena: Score {score} ≥ 80, Trend UP, RSI {rsi} > 35, Status READY.")
-    elif decision == "WAIT_OVERSOLD":
-        st.warning(f"WAIT karena: RSI {rsi} ≤ 30 (oversold ekstrem). Tunggu rebound/base dulu.")
+    if r["decision"] == "BUY":
+        st.success("Trend UP + Score tinggi + RSI sehat")
+    elif r["decision"] == "WAIT_OVERSOLD":
+        st.warning("Oversold ekstrem — tunggu base / rebound")
     else:
-        st.info("WAIT karena: belum memenuhi syarat BUY (Score/Trend/Status/RSI).")
+        st.info("Belum memenuhi kriteria BUY")
 
-    # ENTRY & RISK
-    st.markdown("### 📌 Entry & Risk Summary")
-    e = result["entry"]
-    r = result["risk"]
+    with st.expander("Detail Confidence"):
+        st.json(r["conf"])
 
-    c5, c6, c7 = st.columns(3)
-    c5.metric("Entry Range", f"{e['EntryLow']} – {e['EntryHigh']}" if e["EntryLow"] is not None else "-")
-    c6.metric("Stop Loss", e["StopLoss"] if e["StopLoss"] is not None else "-")
-    risk_amount = r.get("risk_amount") if isinstance(r, dict) else None
-    c7.metric("Risk (Rp)", risk_amount if risk_amount is not None else "-")
-
-    with st.expander("📋 Entry Plan Detail"):
-        st.json(result["plan"])
-
-    with st.expander("🧠 Confidence Detail"):
-        st.json(result["conf"])
-
-    with st.expander("🧩 Pattern & Interpretation"):
-        st.write(result["desc"])
-        st.json(result["patterns"])
-
-
+    with st.expander("Entry Plan"):
+        st.json(r["plan"])
 
 # ======================================================
 # TAB 2 — AUTO SYNC
@@ -527,4 +492,5 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
+
 
