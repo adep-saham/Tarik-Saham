@@ -34,10 +34,12 @@ from scanner.telegram_alert import send_telegram_alert
 # ================= RANKING =================
 from scanner.ranking_engine import rank_sync_stocks
 from scanner.decision_engine import decide_action
+
+# ================= NEW MODULES =================
 from scanner.auto_scan_bundle import auto_scan_30_60_120
 from scanner.bandarmologi_engine import compute_bandar_rekap
-
 from services.profiler import Profiler
+
 
 # ======================================================
 # 🚀 PERFORMANCE — CACHE DATA
@@ -55,12 +57,36 @@ def safe_scan(window, tickers):
         return [], None
 
 
+# ======================================================
+# HELPERS
+# ======================================================
+def plan_get(plan: dict, *keys, default=None):
+    """Ambil nilai dari plan dengan beberapa kandidat key."""
+    if not isinstance(plan, dict):
+        return default
+    for k in keys:
+        if k in plan and plan.get(k) is not None:
+            return plan.get(k)
+    return default
+
+
+def fmt_num(x):
+    if x is None:
+        return "-"
+    try:
+        return f"{float(x):,.2f}"
+    except Exception:
+        return str(x)
+
+
 # ================= STYLE =================
 def color_decision(val):
     if val == "BUY":
         return "background-color:#2ecc71;color:white"
     if val == "WAIT":
         return "background-color:#f1c40f;color:black"
+    if val == "WAIT_OVERSOLD":
+        return "background-color:#f39c12;color:white"
     return ""
 
 
@@ -84,6 +110,9 @@ if "equity_df" not in st.session_state:
 if "prev_final_actions" not in st.session_state:
     st.session_state.prev_final_actions = {}
 
+if "profile_df" not in st.session_state:
+    st.session_state.profile_df = None
+
 
 # ======================================================
 # 📥 LOAD IDX UNIVERSE
@@ -94,12 +123,14 @@ def load_universe():
     df.columns = [c.lower().strip() for c in df.columns]
 
     if "ticker" not in df.columns:
-        df = df.rename(columns={"kode": "ticker"})
+        if "kode" in df.columns:
+            df = df.rename(columns={"kode": "ticker"})
+        else:
+            st.error("Kolom ticker/kode tidak ditemukan di data/idx_universe.csv")
+            st.stop()
 
     df["ticker"] = df["ticker"].astype(str).str.upper().str.strip()
-    df["ticker"] = df["ticker"].apply(
-        lambda x: x if x.endswith(".JK") else f"{x}.JK"
-    )
+    df["ticker"] = df["ticker"].apply(lambda x: x if x.endswith(".JK") else f"{x}.JK")
     return df
 
 
@@ -117,9 +148,12 @@ boards = st.multiselect(
     default=["UTAMA", "AKSELERASI"]
 )
 
-IDX_UNIVERSE = IDX_UNIVERSE[IDX_UNIVERSE["board"].isin(boards)]
-TICKERS = IDX_UNIVERSE["ticker"].tolist()
+if "board" in IDX_UNIVERSE.columns:
+    IDX_UNIVERSE = IDX_UNIVERSE[IDX_UNIVERSE["board"].isin(boards)]
+else:
+    st.warning("Kolom 'board' tidak ditemukan di idx_universe.csv — filter papan di-skip.")
 
+TICKERS = IDX_UNIVERSE["ticker"].tolist()
 st.caption(f"Universe IDX: {len(TICKERS)} saham")
 
 
@@ -149,10 +183,7 @@ tab_single, tab_auto = st.tabs([
 
 
 # ======================================================
-# TAB 1 — SINGLE STOCK
-# ======================================================
-# ======================================================
-# TAB 1 — SINGLE STOCK (UPGRADED)
+# TAB 1 — SINGLE STOCK (REAL UPGRADE)
 # ======================================================
 with tab_single:
     (
@@ -339,17 +370,14 @@ with tab_single:
             st.json(result["patterns"])
 
 
-
 # ======================================================
 # TAB 2 — AUTO SYNC
 # ======================================================
 with tab_auto:
     st.subheader("🤖 Auto Sync Stocks")
 
-    # --- Profiler ---
     prof = Profiler()
-
-    colA, colB, colC = st.columns([1,1,2])
+    colA, colB, colC = st.columns([1, 1, 2])
 
     with colA:
         run_auto = st.button("⚡ SCAN AUTO (30+60+120)")
@@ -358,7 +386,7 @@ with tab_auto:
         show_profile = st.checkbox("🧪 Tampilkan Profiling", value=True)
 
     with colC:
-        st.caption("Auto scan akan menjalankan 30→60→120 + progress + cache")
+        st.caption("Auto scan menjalankan 30→60→120 + progress + cache")
 
     if run_auto:
         results = auto_scan_30_60_120(
@@ -371,6 +399,7 @@ with tab_auto:
         st.session_state.w30 = results["w30"]
         st.session_state.w60 = results["w60"]
         st.session_state.w120 = results["w120"]
+        st.session_state.profile_df = prof.df()
 
     w30, w60, w120 = st.session_state.w30, st.session_state.w60, st.session_state.w120
     sync = (w30 & w60) | (w30 & w120) | (w60 & w120)
@@ -382,19 +411,19 @@ with tab_auto:
         f"Total Sync: {len(sync)}"
     )
 
-    # === PROFILING RESULT ===
     if show_profile:
         with st.expander("🧪 Profiling (Step Paling Berat)", expanded=False):
-            st.dataframe(prof.df(), use_container_width=True)
+            if st.session_state.profile_df is not None:
+                st.dataframe(st.session_state.profile_df, use_container_width=True)
+            else:
+                st.info("Belum ada profiling. Jalankan SCAN AUTO dulu.")
 
     if not sync:
         st.warning("Tidak ada saham sinkron.")
         st.stop()
 
-    # === RANKING (juga diprofiling) ===
-    df_rank = prof.track(
-        "rank_sync_stocks",
-        rank_sync_stocks,
+    # === RANKING ===
+    df_rank = rank_sync_stocks(
         tickers=sync,
         w30=w30, w60=w60, w120=w120,
         load_price_data=cached_fetch_data,
@@ -411,6 +440,7 @@ with tab_auto:
         axis=1
     )
 
+    # FIX VALUEERROR: always return 3 columns
     def safe_entry_zone(row, mode):
         if row["Decision"] == "BUY":
             zone = compute_entry_zone(row, mode)
@@ -419,24 +449,18 @@ with tab_auto:
                 "EntryHigh": zone.get("EntryHigh"),
                 "StopLoss": zone.get("StopLoss"),
             })
-        else:
-            return pd.Series({
-                "EntryLow": None,
-                "EntryHigh": None,
-                "StopLoss": None,
-            })
-    
+        return pd.Series({"EntryLow": None, "EntryHigh": None, "StopLoss": None})
+
     df_rank[["EntryLow", "EntryHigh", "StopLoss"]] = df_rank.apply(
         lambda r: safe_entry_zone(r, active_mode),
         axis=1
     )
 
-
     df_rank["FinalAction"] = df_rank.apply(
         lambda r: "BUY"
         if r["Decision"] == "BUY"
         and r["Confirmed"]
-        and pd.notna(r.get("EntryLow"))
+        and pd.notna(r["EntryLow"])
         else "WAIT",
         axis=1
     )
@@ -452,7 +476,7 @@ with tab_auto:
     # 📊 BANDARMOLOGI — Upload Broker Summary CSV
     # ======================================================
     st.subheader("🏦 Rekap Bandarmologi (Upload Broker Summary)")
-    st.caption("Upload CSV broker summary dari Stockbit/RTI/TradingView/broker. Minimal: date, broker, type(BY/SL), lot, avg(optional).")
+    st.caption("Upload CSV broker summary. Minimal: date, broker, type(BY/SL), lot, avg(optional).")
 
     up = st.file_uploader("Upload CSV Broker Summary", type=["csv"], key="broker_csv")
 
@@ -464,7 +488,6 @@ with tab_auto:
             st.markdown("### ✅ Rekap Tabel Bandar (Remaining Lots + WAP)")
             st.dataframe(bandar, use_container_width=True)
 
-            # ringkas top bandar akumulasi
             top_acc = bandar.sort_values("net_lot", ascending=False).head(10)
             st.markdown("### 🔥 Top 10 Bandar (Net Lot)")
             st.dataframe(top_acc, use_container_width=True)
@@ -472,18 +495,14 @@ with tab_auto:
         except Exception as e:
             st.error(f"Gagal proses broker CSV: {e}")
     else:
-        st.info("Belum ada broker CSV. Rekap bandarmologi akan muncul setelah upload.")
+        st.info("Belum ada broker CSV. Rekap bandarmologi muncul setelah upload.")
 
-    # ===== ALERT & EQUITY (biarkan seperti versi kamu) =====
-    # (tetap gunakan blok alert dan equity curve yang sudah ada)
-
-
+    # ===== ALERT =====
     if enable_alerts:
         current = dict(zip(df_rank["Ticker"], df_rank["FinalAction"]))
         flipped = [
             t for t, v in current.items()
-            if st.session_state.prev_final_actions.get(t) == "WAIT"
-            and v == "BUY"
+            if st.session_state.prev_final_actions.get(t) == "WAIT" and v == "BUY"
         ]
         st.session_state.prev_final_actions = current
 
@@ -491,15 +510,16 @@ with tab_auto:
             st.toast(f"🚨 WAIT → BUY: {', '.join(flipped)}")
             if enable_tg:
                 for t in flipped:
-                    r = df_rank[df_rank["Ticker"] == t].iloc[0]
+                    rr = df_rank[df_rank["Ticker"] == t].iloc[0]
                     send_telegram_alert(
-                        f"🚨 *WAIT → BUY*\n"
+                        "🚨 *WAIT → BUY*\n"
                         f"*Ticker*: {t}\n"
                         f"*Mode*: {active_mode}\n"
-                        f"*Entry*: {r['EntryLow']} – {r['EntryHigh']}\n"
-                        f"*SL*: {r['StopLoss']}"
+                        f"*Entry*: {rr['EntryLow']} – {rr['EntryHigh']}\n"
+                        f"*SL*: {rr['StopLoss']}"
                     )
 
+    # ===== EQUITY =====
     if run_eq:
         st.session_state.equity_df = build_equity_curve(
             tickers=df_rank["Ticker"].tolist(),
@@ -512,7 +532,3 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
-
-
-
-
