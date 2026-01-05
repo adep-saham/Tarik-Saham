@@ -38,6 +38,49 @@ from scanner.telegram_alert import send_telegram_alert
 from scanner.bandarmologi_engine import compute_bandar_rekap
 from services.profiler import Profiler
 
+import scanner.decision_engine as _de
+
+def decide_action_safe(row, mode):
+    # Defensive extraction
+    try:
+        sync = int(row.get("Sync", 1))
+    except Exception:
+        sync = 1
+    try:
+        score = float(row.get("Score", 0))
+    except Exception:
+        score = 0.0
+
+    trend = str(row.get("Trend", "")).upper()
+    status = str(row.get("Status", "")).upper()
+
+    try:
+        rsi = float(row.get("RSI14", 50))
+    except Exception:
+        rsi = 50.0
+
+    mode = str(mode).strip().title()
+
+    if mode == "Momentum":
+        if sync >= 1 and score >= 75 and trend == "UP" and status in ("READY", "BREAKOUT") and 40 <= rsi <= 70:
+            return "BUY"
+        return "WAIT"
+
+    if mode == "Pullback":
+        if sync >= 1 and score >= 70 and trend == "UP" and status in ("PULLBACK", "RETEST", "CONSOLIDATION") and rsi >= 40:
+            return "BUY"
+        return "WAIT"
+
+    if mode == "Mean Reversion":
+        if rsi <= 30:
+            return "BUY"
+        return "WAIT"
+
+    return "WAIT"
+
+# Monkey patch: override imported module behavior
+_de.decide_action = decide_action_safe
+decide_action = decide_action_safe
 
 # ======================================================
 # PAGE
@@ -294,3 +337,4 @@ with tab_auto:
         df_rank[["Ticker", "Decision", "EntryLow", "EntryHigh", "StopLoss"]],
         width="stretch"
     )
+
