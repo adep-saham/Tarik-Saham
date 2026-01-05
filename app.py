@@ -151,6 +151,9 @@ tab_single, tab_auto = st.tabs([
 # ======================================================
 # TAB 1 — SINGLE STOCK
 # ======================================================
+# ======================================================
+# TAB 1 — SINGLE STOCK (UPGRADED)
+# ======================================================
 with tab_single:
     (
         raw_ticker,
@@ -162,6 +165,9 @@ with tab_single:
         analyze_btn
     ) = sidebar_inputs()
 
+    # ==============================
+    # ANALYZE
+    # ==============================
     if analyze_btn and raw_ticker:
         try:
             ticker = normalize_ticker(raw_ticker)
@@ -173,38 +179,74 @@ with tab_single:
                 df = calc_indicators(df)
                 last = df.iloc[-1]
 
+                # --- CORE ANALYSIS ---
+                desc = interpret_last(last)
+                patterns = detect_patterns(df)
                 plan = generate_entry_plan(df)
+
                 conf = compute_confidence(
-                    df, last,
-                    interpret_last(last),
-                    detect_patterns(df),
-                    plan
+                    df, last, desc, patterns, plan
                 )
 
                 risk = compute_risk(
-                    capital, risk_pct, lot_size,
-                    plan, safe_float(last.get("Close"))
+                    capital,
+                    risk_pct,
+                    lot_size,
+                    plan,
+                    safe_float(last.get("Close"))
                 )
 
                 badge_text, _ = get_trade_badge(
-                    conf["score"],
+                    conf.get("score", 0),
                     plan.get("status"),
                     plan.get("trend")
                 )
 
+                # --- DECISION (SINGLE MODE) ---
+                decision = (
+                    "BUY"
+                    if conf.get("score", 0) >= 75
+                    and plan.get("status") == "READY"
+                    else "WAIT"
+                )
+
+                # --- SAFE ENTRY ZONE ---
+                def safe_entry_zone_single(plan):
+                    if decision == "BUY":
+                        return {
+                            "EntryLow": plan.get("entry_low"),
+                            "EntryHigh": plan.get("entry_high"),
+                            "StopLoss": plan.get("stop_loss"),
+                        }
+                    return {
+                        "EntryLow": None,
+                        "EntryHigh": None,
+                        "StopLoss": None,
+                    }
+
+                entry_zone = safe_entry_zone_single(plan)
+
+                # SIMPAN KE SESSION
                 st.session_state.single_result = {
                     "ticker": ticker,
                     "df": df,
                     "last": last,
+                    "desc": desc,
+                    "patterns": patterns,
                     "plan": plan,
                     "conf": conf,
                     "risk": risk,
-                    "badge": badge_text
+                    "decision": decision,
+                    "entry": entry_zone,
+                    "badge": badge_text,
                 }
 
         except Exception as e:
             st.error(f"Single analysis error: {e}")
 
+    # ==============================
+    # RENDER RESULT
+    # ==============================
     result = st.session_state.single_result
     if not result:
         st.info("Klik **Analisa** di sidebar.")
@@ -212,9 +254,22 @@ with tab_single:
         df = result["df"]
         last = result["last"]
 
-        st.subheader(f"{result['ticker']} — {result['badge']}")
+        # ======================================================
+        # HEADER
+        # ======================================================
+        st.subheader(
+            f"{result['ticker']} — {result['badge']} | Decision: **{result['decision']}**"
+        )
 
-        zoom = st.select_slider("Window", [30, 60, 120], 30)
+        # ======================================================
+        # CHART
+        # ======================================================
+        zoom = st.select_slider(
+            "🔍 Window Analisa",
+            options=[30, 60, 120],
+            value=30
+        )
+
         dfw = df.tail(zoom).reset_index()
 
         price = alt.Chart(dfw).mark_line().encode(
@@ -227,13 +282,54 @@ with tab_single:
             color="red", strokeDash=[6, 3]
         ).encode(x="Date:T", y="EMA50:Q")
 
-        st.altair_chart((price + ema20 + ema50).interactive(),
-                         use_container_width=True)
+        st.altair_chart(
+            (price + ema20 + ema50).interactive(),
+            use_container_width=True
+        )
 
-        c1, c2, c3 = st.columns(3)
+        # ======================================================
+        # QUICK METRICS
+        # ======================================================
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("Close", round(safe_float(last["Close"]), 2))
         c2.metric("RSI14", round(safe_float(last["RSI14"]), 2))
-        c3.metric("Confidence", round(result["conf"]["score"], 2))
+        c3.metric("Trend", result["plan"].get("trend", "-"))
+        c4.metric("Confidence", round(result["conf"].get("score", 0), 2))
+
+        # ======================================================
+        # ENTRY & RISK SUMMARY
+        # ======================================================
+        st.markdown("### 📌 Entry & Risk Summary")
+
+        e = result["entry"]
+        r = result["risk"]
+
+        c5, c6, c7 = st.columns(3)
+        c5.metric("Entry Range", f"{e['EntryLow']} – {e['EntryHigh']}")
+        c6.metric("Stop Loss", e["StopLoss"])
+        c7.metric("Risk (Rp)", r.get("risk_amount", "-"))
+
+        # ======================================================
+        # DECISION SNAPSHOT
+        # ======================================================
+        if result["decision"] == "BUY":
+            st.success("✅ Layak untuk diperdagangkan sesuai risk management.")
+        else:
+            st.warning("⏳ Belum layak entry. Tunggu konfirmasi berikutnya.")
+
+        # ======================================================
+        # DETAIL (OPTIONAL)
+        # ======================================================
+        with st.expander("🧠 Confidence Detail"):
+            st.json(result["conf"])
+
+        with st.expander("📋 Entry Plan Detail"):
+            st.json(result["plan"])
+
+        with st.expander("🧩 Pattern & Interpretation"):
+            st.write(result["desc"])
+            st.json(result["patterns"])
+
 
 
 # ======================================================
@@ -408,5 +504,6 @@ with tab_auto:
     if st.session_state.equity_df is not None:
         st.subheader("📈 Equity Curve")
         st.line_chart(st.session_state.equity_df["Equity"])
+
 
 
